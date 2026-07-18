@@ -1,0 +1,76 @@
+🧭 User Manual – Fearless Code Companion
+
+🧠 Main Chat – Your Personal Fearless Code
+
+This is the heart of the app — where you interact directly with the Fearless Code.
+
+🟢 Best way to use it:
+
+Ask clear, detailed questions about your inner state, blockages, fears, or life situations in general.
+
+Use “I” statements and describe what’s happening inside you (e.g., “I’m stuck in fear of failure when I think about changing jobs”).
+Be honest and specific — the system works best when it has real, current data from you. Provide as much information as you can. Think of it as talking to a good friend.
+
+🧩 How to ask better questions:
+Instead of:
+
+“Why am I like this?”
+Try:
+“Why do I always fall back into fear when I try something new, and how is this connected to my thought process?”
+
+This allows the system to detect your automatic loops, identify your programming, and explain the inner cause-effect chain based on the Fearless Code.
+
+If you do not receive the desired answer, try formulating differently or ask to give a more detailed answer to your question. You can also counter critically by saying "This is not what I meant, I wanted to know..." or "I thought that..." which means you can indicate to the system that the answer was incomplete or unclear.
+
+🤖 Agent Chat – Topic-Specific Support
+
+In this section, you’ll find dedicated Agents for key life areas like:
+
+🔗 Relationships
+🎯 Career
+🔄 Self Development
+💡 Purpose & Vision
+⚡ Emergency Situations
+
+📌 Use these agents when:
+
+• You want tailored input for a specific area.
+• You need support applying the Fearless Code in practical life decisions.
+• You’re seeking inspired actions despite inner resistance (e.g. “I want to break up, but I’m afraid to be alone.”)
+
+🧩 How to ask better questions:
+Instead of:
+
+“What should I do with my job?”
+Try:
+“Every time I think about quitting, I feel tension and fear. What loop am I trapped in, and how do I take action anyway?”
+
+💾 Chat Management (Red + Icon)
+
+You can:
+
+📝 Rename your chats
+ 💾 Save your chats for future access
+📤 Export your chat as PDF for offline use
+🗑️ Delete chats you no longer need
+
+⚠️ Warning: Unsaved chats are deleted daily. If a session was meaningful, save it immediately.
+
+📚 Resources Section
+
+This section offers:
+
+• Manuals, guides and inspirations
+• Quick PDFs you can download or print
+• Additional material to deepen your system understanding
+
+👤 Profile Section
+
+From here, you can:
+
+🌍 Change the app language
+🗂️ View and organize your saved chats
+✏️ Edit your profile information
+
+
+If you have any questions about the app please send us an email to: info@fearlesscode.de

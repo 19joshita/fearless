@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>Fearless Code Companion</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$(MARKETING_VERSION)</string>
+    <key>CFBundleSignature</key>
+    <string>????</string>
+    <key>CFBundleVersion</key>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+    
+    <!-- ==================== -->
+    <!-- APP TRANSPORT SECURITY -->
+    <!-- ==================== -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <false/>
+        <key>NSAllowsArbitraryLoadsInWebContent</key>
+        <true/>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+        <key>NSExceptionDomains</key>
+        <dict>
+            <key>app.fearlesscode.de</key>
+            <dict>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+                <key>NSExceptionMinimumTLSVersion</key>
+                <string>TLSv1.0</string>
+                <key>NSExceptionRequiresForwardSecrecy</key>
+                <false/>
+                <key>NSIncludesSubdomains</key>
+                <true/>
+            </dict>
+        </dict>
+    </dict>
+    
+    <!-- ==================== -->
+    <!-- PERMISSIONS -->
+    <!-- ==================== -->
+    
+    <!-- Microphone Permission - For voice messages and video recording -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>This app needs access to the microphone to record voice messages and videos.</string>
+    
+    <!-- Camera Permission - For taking photos and recording videos -->
+    <key>NSCameraUsageDescription</key>
+    <string>This app needs access to the camera to capture photos and videos for chat.</string>
+    
+    <!-- Photo Library Permission - For selecting images and videos from gallery -->
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>This app needs access to your photo library to select images and videos for chat.</string>
+    
+    <!-- Photo Library Add Permission - For saving photos and videos to gallery -->
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>This app needs permission to save photos and videos to your photo library.</string>
+    
+    <!-- Local Network Permission - For API calls -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>This app needs network access to communicate with the server and send messages.</string>
+    
+    <!-- Apple Music Permission (if needed) -->
+    <key>NSAppleMusicUsageDescription</key>
+    <string>This app needs access to Apple Music to function properly.</string>
+    
+    <!-- ==================== -->
+    <!-- APP CONFIGURATION -->
+    <!-- ==================== -->
+    
+    <key>UIAppFonts</key>
+    <array>
+        <string>Urbanist-Black.ttf</string>
+        <string>Urbanist-Bold.ttf</string>
+        <string>Urbanist-ExtraBold.ttf</string>
+        <string>Urbanist-ExtraLight.ttf</string>
+        <string>Urbanist-Light.ttf</string>
+        <string>Urbanist-Medium.ttf</string>
+        <string>Urbanist-Regular.ttf</string>
+        <string>Urbanist-SemiBold.ttf</string>
+        <string>Urbanist-Thin.ttf</string>
+    </array>
+    <key>UILaunchStoryboardName</key>
+    <string>LaunchScreen</string>
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+        <string>arm64</string>
+    </array>
+    <key>UIRequiresPersistentWiFi</key>
+    <true/>
+    <key>UIStatusBarStyle</key>
+    <string></string>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+    <key>UIViewControllerBasedStatusBarAppearance</key>
+    <false/>
+</dict>
+</plist>

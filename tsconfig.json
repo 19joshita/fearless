@@ -1,0 +1,22 @@
+{
+  "extends": "@react-native/typescript-config/tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "app",
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "@components": ["components"],
+      "@global-components": ["components/global"],
+      "@assets/*": ["assets/*"],
+      "@assets": ["core/assets"],
+      "@navigation": ["navigation"],
+      "@navigation-utils": ["navigation/utils"],
+      "@navigation-stacks": ["navigation/stacks"],
+      "@theme": ["theme"],
+      "@utils": ["utils"],
+      "@constants": ["utils/constants"],
+      "@screens": ["screens"],
+      "@redux/*": ["redux/*"],
+      "@localization": ["utils/Localization"]
+    }
+  }
+}
