@@ -6,8 +6,8 @@ import {
   Image,
   TouchableOpacity,
 } from 'react-native';
-import React, {FC, useEffect} from 'react';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import React, { FC, useEffect } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ICON_GLOBE,
   IMAGE_LOGO,
@@ -15,26 +15,26 @@ import {
   SPLASH_VIDEO,
 } from '@assets/icons';
 import styles from './styles';
-import {STORAGE} from '@constants';
-import {AppButton, AppLabel} from '@components';
-import {COLORS, FONT_FAMILY, FONT_VARIENTS, scaleSize, SPACING} from '@theme';
-import {navigate} from '@navigation-utils';
-import {getPrefsValue, RouteNames, setPrefsValue, useText} from '@utils';
-import {useFocusEffect} from '@react-navigation/native';
+import { STORAGE } from '@constants';
+import { AppButton, AppLabel } from '@components';
+import { COLORS, FONT_FAMILY, FONT_VARIENTS, scaleSize, SPACING } from '@theme';
+import { navigate } from '@navigation-utils';
+import { getPrefsValue, RouteNames, setPrefsValue, useText } from '@utils';
+import { useFocusEffect } from '@react-navigation/native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
 import Video from 'react-native-video';
-import {setIsLogin} from '../../../redux/app-slice';
-import {useAppDispatch} from '../../../redux/reduxHook';
+import { setIsLogin } from '../../../redux/app-slice';
+import { useAppDispatch } from '../../../redux/reduxHook';
 
 const Splash: FC = () => {
   const insets = useSafeAreaInsets();
   const translateY = useSharedValue(scaleSize(450));
   const dispatch = useAppDispatch();
-  const {TEXT} = useText();
+  const { TEXT } = useText();
 
   useFocusEffect(
     React.useCallback(() => {
@@ -89,7 +89,7 @@ const Splash: FC = () => {
       <Animated.View
         style={[
           styles.authConatiner,
-          {bottom: insets.bottom + SPACING.custom(24)},
+          { bottom: insets.bottom + SPACING.custom(24) },
           animatedStyle,
         ]}>
         <AppLabel
@@ -97,7 +97,7 @@ const Splash: FC = () => {
           text={
             <>
               {TEXT.WELCOME_MESSAGE}
-              <Text style={{fontFamily: FONT_FAMILY.Medium}}>
+              <Text style={{ fontFamily: FONT_FAMILY.Medium }}>
                 {TEXT.WELCOME_MESSAGE_LIGHT}
               </Text>
             </>
@@ -122,7 +122,7 @@ const Splash: FC = () => {
         <Image source={IMAGE_LOGO_TEXT} />
       </View>
       <TouchableOpacity
-        style={{right: '5%', ...styles.logoContainer}}
+        style={{ right: '5%', ...styles.logoContainer }}
         onPress={() => navigate(RouteNames.LANGUAGE_STACK)}>
         <ICON_GLOBE />
       </TouchableOpacity>

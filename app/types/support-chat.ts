@@ -48,19 +48,21 @@ export interface Participant {
   profile_image: string | null;
 }
 
+export type MessageStatus = 'sent' | 'delivered' | 'read';
 export interface Message {
   id: number;
   conversation_id: number;
   sender_id: number;
   receiver_id: number;
   sender_type: 'user' | 'admin';
-  message_type: 'text' | 'audio' | 'video' | 'image';
-  message: string;
+  message_type: 'text' | 'image' | 'video' | 'audio';
+  message: string | null;
   media_url: string | null;
   thumbnail: string | null;
   duration: number | null;
-  status: 'sent' | 'delivered' | 'read';
+  status: MessageStatus; 
   created_at: string;
+  updated_at?: string;
 }
 
 export interface Pagination {
@@ -180,4 +182,13 @@ export interface DeleteConversationParams {
 export interface DeleteConversationResponse {
   message?: string;
   success?: boolean;
+}
+export interface MarkMessagesAsReadParams {
+  conversationId: number | string;
+  message_ids: number[];
+}
+
+export interface MarkMessagesAsReadResponse {
+  success: boolean;
+  message: string;
 }

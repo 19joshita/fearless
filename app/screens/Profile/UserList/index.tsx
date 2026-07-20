@@ -24,6 +24,9 @@ import {
 } from '@redux/support-chat-slice';
 import {store} from '@redux/store';
 
+// ✅ 1. ADD THIS IMPORT
+import {useFocusEffect} from '@react-navigation/native';
+
 // ✅ NEW: Import the hook and its type (Adjust path if needed)
 import {
   useAdminListSocket,
@@ -71,7 +74,6 @@ const UserList = () => {
     isFetching,
     isLoading,
   } = useGetAdminConversationsQuery({page, limit});
-
   const [triggerRefresh] = useLazyGetAdminConversationsQuery();
   const [markAsRead] = useMarkConversationAsReadMutation();
   const [deleteConversation, {isLoading: isDeleting}] =
@@ -87,6 +89,28 @@ const UserList = () => {
     const hasNoMessage = !c?.last_message;
     return !isAdmin && !hasNoMessage;
   });
+
+  // =========================================================================
+  // ✅ 2. ADD THIS: REFETCH ON FOCUS
+  // =========================================================================
+  useFocusEffect(
+    useCallback(() => {
+      // Clear existing cache to prevent the custom `merge` logic from ignoring updates
+      store.dispatch(
+        supportChatSlice.util.updateQueryData(
+          'getAdminConversations',
+          {page: 1, limit},
+          draft => {
+            if (draft.data) draft.data = [];
+          },
+        ),
+      );
+
+      // Force a fresh network fetch
+      triggerRefresh({page: 1, limit});
+      setPage(1);
+    }, [limit, triggerRefresh]),
+  );
 
   const handleNewConversationCreated = useCallback(
     (data: AdminConversationPayload) => {
@@ -231,6 +255,7 @@ const UserList = () => {
       setIsRefreshing(false);
     }
   };
+
   const handleSelectUser = async (item: AdminConversation) => {
     if ((item?.unread_count ?? 0) > 0) {
       // 1. Call API
@@ -260,6 +285,7 @@ const UserList = () => {
       userName: item?.user?.name ?? 'Unknown User',
     });
   };
+
   const handleLongPress = (conversationId: number) => {
     if (conversationId == null) return;
     setSelectedConversationId(conversationId);
@@ -415,7 +441,7 @@ const UserList = () => {
           onRefresh={onRefresh}
           ListFooterComponent={renderFooter}
           ListEmptyComponent={
-            !isRefreshing ? (
+            !isRefreshing && !isFetching ? (
               <View style={[styles.center, {flex: 1}]}>
                 <Text style={styles.emptyText}>No user conversations yet</Text>
               </View>

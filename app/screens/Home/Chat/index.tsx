@@ -5,9 +5,7 @@ import {
   AppState,
   AppStateStatus,
   FlatList,
-  Linking,
   Platform,
-  Share,
   View,
 } from 'react-native';
 import {
@@ -63,6 +61,7 @@ import {
   AgentTabRootStackParamList,
   goBack,
   ResourcesTabRootStackParamList,
+  navigate,
 } from '@navigation-utils';
 import useIsTabScreen from './useIsTabScreen';
 import {useText} from '@localization';

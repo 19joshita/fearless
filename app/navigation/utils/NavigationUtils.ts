@@ -9,20 +9,32 @@ export const navigationRef =
   createNavigationContainerRef<MergedStackParamsList>();
 
 export async function navigate(routeName: string, params?: object) {
-  navigationRef?.isReady();
+  // ✅ FIX: Add 'await' here!
+  await navigationRef?.isReady(); 
+  
   if (navigationRef.isReady()) {
     navigationRef.dispatch(CommonActions.navigate(routeName, params));
+  } else {
+    // ✅ FIX: Add a fallback just in case it's still not ready
+    console.log('Navigation not ready, waiting 500ms...');
+    setTimeout(async () => {
+      await navigationRef?.isReady();
+      if (navigationRef.isReady()) {
+        navigationRef.dispatch(CommonActions.navigate(routeName, params));
+      }
+    }, 500);
   }
 }
 
 export async function replace(routeName: string, params?: object) {
-  navigationRef?.isReady();
+  await navigationRef?.isReady(); // ✅ Add await here too
   if (navigationRef.isReady()) {
     navigationRef.dispatch(StackActions.replace(routeName, params));
   }
 }
+
 export async function resetAndNavigate(routeName: string, params?: object) {
-  navigationRef?.isReady();
+  await navigationRef?.isReady(); // ✅ Add await here too
   if (navigationRef.isReady()) {
     navigationRef.dispatch(
       CommonActions.reset({
@@ -32,8 +44,9 @@ export async function resetAndNavigate(routeName: string, params?: object) {
     );
   }
 }
+
 export async function goBack() {
-  navigationRef?.isReady();
+  await navigationRef?.isReady(); // ✅ Add await here too
   if (navigationRef.isReady()) {
     navigationRef.dispatch(CommonActions.goBack());
   }

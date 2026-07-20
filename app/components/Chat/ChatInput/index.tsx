@@ -25,20 +25,20 @@ interface ChatInputProps {
   onPress: (text: string) => void;
   isDisabled?: boolean;
   showImage?: boolean;
-  openGallery: () => void;
-  handleAudio: () => void;
-  startRecording: () => void;
-  stopRecording: () => void;
-  handleUploadFile: (
+  openGallery?: () => void;
+  handleAudio?: () => void;
+  startRecording?: () => void;
+  stopRecording?: () => void;
+  handleUploadFile?: (
     uri: string,
     type: string,
     name: string,
   ) => Promise<string | null>;
-  uploadedUrl: string | null;
-  uploadedType: 'image' | 'video' | 'audio' | null;
-  isUploading: boolean;
-  isRecording: boolean;
-  onRemoveMedia: () => void;
+  uploadedUrl?: string | null;
+  uploadedType?: 'image' | 'video' | 'audio' | null;
+  isUploading?: boolean;
+  isRecording?: boolean;
+  onRemoveMedia?: () => void;
   showInputIcon?: boolean;
 }
 

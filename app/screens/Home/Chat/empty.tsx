@@ -1,4 +1,4 @@
-import {View, Text, Image} from 'react-native';
+import {View, Text, Image, TouchableOpacity} from 'react-native';
 import React, {FC} from 'react';
 import {AppLabel, AppView, ChatHeader} from '@components';
 import {TEXT} from '@constants';
@@ -7,12 +7,14 @@ import styles from './styles';
 import {FONT_FAMILY, FONT_VARIENTS, SPACING} from '@theme';
 import {useAppSelector} from '@redux/reduxHook';
 import {PROMTS} from './prompts';
-
+import {navigate} from '@navigation-utils';
+import { RouteNames } from '@utils';
 const Chat: FC = () => {
+  
   const Profile = useAppSelector(state => state?.app?.userInfo);
   return (
     <AppView>
-      <ChatHeader title={TEXT.CHAT} isLeftIcon={false} />
+      <ChatHeader title={TEXT.CHAT} isLeftIcon={false} onlayout={()=>{}} />
 
       <Image source={IMAGE_LOGO} style={styles.imageStyle} />
       <AppLabel

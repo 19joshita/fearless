@@ -12,6 +12,7 @@
     "open-xcode": "xed ios"
   },
   "dependencies": {
+    "@notifee/react-native": "^9.1.8",
     "@react-native-camera-roll/camera-roll": "^7.10.2",
     "@react-native-community/blur": "^4.4.1",
     "@react-native-community/netinfo": "^11.4.1",

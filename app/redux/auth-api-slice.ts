@@ -51,7 +51,8 @@ const baseQuery = fetchBaseQuery({
 
 const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {
   const result = await baseQuery(args, api, extraOptions);
-  console.log(result?.error);
+  console.log('API:', api);
+  console.log(result?.error, 'result?.error=====>>');
   if (result?.error?.status) {
     Toast.show({
       //@ts-ignore

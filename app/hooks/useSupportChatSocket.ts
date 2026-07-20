@@ -29,10 +29,12 @@ export const useSupportChatSocket = (
 ) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
-  
+
   // ✅ CHANGED: Use a Record to track multiple users instead of a single object
-  const [presenceMap, setPresenceMap] = useState<Record<number, 'online' | 'offline'>>({});
-  
+  const [presenceMap, setPresenceMap] = useState<
+    Record<number, 'online' | 'offline'>
+  >({});
+
   const wsRef = useRef<WebSocket | null>(null);
   const messagesRef = useRef<ChatMessage[]>([]);
 
@@ -63,20 +65,53 @@ export const useSupportChatSocket = (
         if (response.event === 'new_message') {
           const newMessage = response.data as ChatMessage;
           console.log('💬 New WS Message:', newMessage.message);
-
           const exists = messagesRef.current.some(m => m.id === newMessage.id);
           if (!exists) {
             messagesRef.current = [...messagesRef.current, newMessage];
             setMessages([...messagesRef.current]);
           }
-          
-        // ✅ NEW: Handle the initial list of online users sent right after connection
-        } else if (response.event === 'presence_init' || response.type === 'presence_init') {
-          console.log('🟢 Presence Init:', response.online_users || response.data?.online_users);
-          
-          // Safely grab the array whether the backend puts it in "data" or at the root
-          const onlineUsers = response.online_users || response.data?.online_users || [];
-          
+
+          // ✅ NEW: Handle message read event (Blue Ticks)
+        } else if (response.event === 'message_read') {
+          const {message_ids} = response.data || response;
+          if (
+            message_ids &&
+            Array.isArray(message_ids) &&
+            message_ids.length > 0
+          ) {
+            const idsSet = new Set(message_ids);
+            messagesRef.current = messagesRef.current.map(msg =>
+              idsSet.has(msg.id) ? {...msg, status: 'read' as const} : msg,
+            );
+            setMessages([...messagesRef.current]);
+          }
+
+          // ✅ NEW: Handle message delivered event (Grey Double Ticks)
+        } else if (response.event === 'message_delivered') {
+          const {message_ids} = response.data || response;
+          if (
+            message_ids &&
+            Array.isArray(message_ids) &&
+            message_ids.length > 0
+          ) {
+            const idsSet = new Set(message_ids);
+            messagesRef.current = messagesRef.current.map(msg =>
+              idsSet.has(msg.id) && msg.status === 'sent'
+                ? {...msg, status: 'delivered' as const}
+                : msg,
+            );
+            setMessages([...messagesRef.current]);
+          }
+        } else if (
+          response.event === 'presence_init' ||
+          response.type === 'presence_init'
+        ) {
+          console.log(
+            '🟢 Presence Init:',
+            response.online_users || response.data?.online_users,
+          );
+          const onlineUsers =
+            response.online_users || response.data?.online_users || [];
           setPresenceMap(prev => {
             const newMap = {...prev};
             onlineUsers.forEach((user: PresenceData) => {
@@ -84,12 +119,9 @@ export const useSupportChatSocket = (
             });
             return newMap;
           });
-
         } else if (response.event === 'presence') {
           const presence = response.data as PresenceData;
           console.log('🟢 Presence Update:', presence);
-          
-          // ✅ CHANGED: Merge into the map instead of overwriting
           setPresenceMap(prev => ({
             ...prev,
             [presence.user_id]: presence.status,
@@ -104,8 +136,6 @@ export const useSupportChatSocket = (
 
     ws.onclose = event => {
       setIsConnected(false);
-      // ✅ CHANGED: Removed the manual offline setter here. 
-      // The backend broadcasts the 'offline' event to the room automatically.
       wsRef.current = null;
     };
 
@@ -127,7 +157,5 @@ export const useSupportChatSocket = (
       console.warn('⚠️ WebSocket not connected');
     }
   };
-
-  // ✅ CHANGED: Return presenceMap instead of presenceStatus
   return {messages, isConnected, presenceMap, sendMessage};
 };

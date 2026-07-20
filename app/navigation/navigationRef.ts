@@ -71,8 +71,6 @@ export function navigateFromNotificationRedirect(
     }
 
     const { screen, params } = redirect;
-    console.log('🧭 Navigating from notification to:', screen, 'with params:', params);
-
     // Use your existing global navigate function
     void navigate(screen, params);
 }

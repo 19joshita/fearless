@@ -49,7 +49,7 @@ const Login: FC = () => {
         email: formik.values.emailAddress,
         password: formik.values.password,
       }).unwrap();
-
+      console.log(response, 'response');
       if (response?.success) {
         // Login successful
         setPrefsValue(STORAGE.TOKEN, response?.token);

@@ -159,14 +159,14 @@ export const ResourceTabCollection = [
     component: ResourceView,
   },
 ];
-export const SupportChatCollection = [
-  {
-    name: RouteNames.SUPPORT_CHAT,
-    component: SupportChat,
-  },
-  {
-    name: RouteNames.USER_LIST,
-    component: UserList,
-  },
+// export const SupportChatCollection = [
+//   {
+//     name: RouteNames.SUPPORT_CHAT,
+//     component: SupportChat,
+//   },
+//   {
+//     name: RouteNames.USER_LIST,
+//     component: UserList,
+//   },
 
-];
+// ];
