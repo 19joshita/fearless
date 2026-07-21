@@ -6,8 +6,8 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
-import React, { useState, useEffect } from 'react';
-import { COLORS, FONT_FAMILY, scaleSize } from '@theme';
+import React, {useState, useEffect} from 'react';
+import {COLORS, FONT_FAMILY, scaleSize} from '@theme';
 import {
   ICON_INPUT_RADIUS,
   ICON_SEND,
@@ -16,9 +16,9 @@ import {
   ICON_PLAY,
   ICON_CLOSE,
 } from '@assets/icons';
-import { AppImage } from '@global-components';
-import { useAppSelector } from '@redux/reduxHook';
-import { useText } from '@localization';
+import {AppImage} from '@global-components';
+import {useAppSelector} from '@redux/reduxHook';
+import {useText} from '@localization';
 import Video from 'react-native-video';
 
 interface ChatInputProps {
@@ -55,7 +55,7 @@ const ChatInput = ({
   onRemoveMedia,
   showInputIcon = false,
 }: ChatInputProps) => {
-  const { TEXT } = useText();
+  const {TEXT} = useText();
   const Profile = useAppSelector(state => state.app?.userInfo);
   const [text, setText] = useState<string>('');
   const [isAudioPlaying, setIsAudioPlaying] = useState<boolean>(false);
@@ -152,7 +152,7 @@ const ChatInput = ({
               {/* Hidden Video component to actually play the audio (prevents TS errors) */}
               {!isUploading && uploadedUrl && (
                 <Video
-                  source={{ uri: uploadedUrl }}
+                  source={{uri: uploadedUrl}}
                   paused={!isAudioPlaying}
                   repeat={true}
                   style={styles.hiddenAudioPlayer}
@@ -163,8 +163,8 @@ const ChatInput = ({
             <>
               {/* Loader while Image/Video is uploading */}
               {(uploadedType === 'image' || uploadedType === 'video') &&
-                isUploading &&
-                !uploadedUrl ? (
+              isUploading &&
+              !uploadedUrl ? (
                 <View style={styles.mediaPreviewContainer}>
                   <View style={styles.loaderPlaceholder}>
                     <ActivityIndicator
@@ -178,11 +178,11 @@ const ChatInput = ({
 
               {/* Actual Image/Video Preview after successful upload */}
               {uploadedUrl &&
-                (uploadedType === 'image' || uploadedType === 'video') ? (
+              (uploadedType === 'image' || uploadedType === 'video') ? (
                 <View style={styles.mediaPreviewContainer}>
                   {uploadedType === 'video' ? (
                     <Video
-                      source={{ uri: uploadedUrl }}
+                      source={{uri: uploadedUrl}}
                       style={styles.mediaPreview}
                       resizeMode="cover"
                       paused={true}
@@ -217,7 +217,7 @@ const ChatInput = ({
                   value={text}
                   onChangeText={setText}
                   allowFontScaling={false}
-                  style={[styles.textInput, { color: COLORS.BODY_TEXT_COLOR }]}
+                  style={[styles.textInput, {color: COLORS.BODY_TEXT_COLOR}]}
                 />
                 {showInputIcon && (
                   <>
@@ -225,7 +225,7 @@ const ChatInput = ({
                       onPress={openGallery}
                       style={[
                         styles.iconBtn,
-                        isMediaDisabled && { opacity: 0.4 },
+                        isMediaDisabled && {opacity: 0.4},
                       ]}
                       disabled={isMediaDisabled}>
                       <ICON_CAMERA
@@ -237,7 +237,7 @@ const ChatInput = ({
                       onPress={handleAudio}
                       style={[
                         styles.iconBtn,
-                        isMediaDisabled && { opacity: 0.4 },
+                        isMediaDisabled && {opacity: 0.4},
                       ]}
                       disabled={isMediaDisabled}>
                       <ICON_MICROPHONE
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     width: scaleSize(32),
     borderRadius: scaleSize(16),
   },
-  inputWrapper: { flex: 1, position: 'relative' as const },
+  inputWrapper: {flex: 1, position: 'relative' as const},
   bubblePointer: {
     position: 'absolute' as const,
     left: -5,

@@ -42,7 +42,6 @@ const Login: FC = () => {
   };
 
   const [loginApi, {isLoading}] = useLoginApiMutation();
-
   const handleLogin = async () => {
     try {
       const response = await loginApi({

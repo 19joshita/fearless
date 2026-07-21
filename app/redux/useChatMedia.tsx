@@ -1,4 +1,4 @@
-// hooks/useMediaHooks.ts
+// @redux/useChatMedia.ts
 import {useState, useCallback, useRef, useEffect} from 'react';
 import {
   launchImageLibrary,
@@ -6,6 +6,7 @@ import {
   Asset,
 } from 'react-native-image-picker';
 import AudioRecord from 'react-native-audio-record';
+import { Platform, PermissionsAndroid } from 'react-native';
 
 // ==================== GALLERY PICKER TYPES ====================
 interface SelectedMedia {
@@ -41,7 +42,7 @@ interface UseAudioRecorderReturn {
   recordingDuration: number;
   formattedDuration: string;
   error: string | null;
-  startRecording: (options?: AudioRecorderOptions) => void;
+  startRecording: (options?: AudioRecorderOptions) => Promise<void>;
   stopRecording: () => Promise<string | null>;
   reset: () => void;
 }
@@ -63,17 +64,12 @@ export const useGalleryPicker = (): UseGalleryPickerReturn => {
         mediaType: 'mixed',
         selectionLimit: 0,
         videoQuality: 'high',
-        quality: 0.8, // Compress slightly for performance
+        quality: 0.8,
         includeBase64: false,
         ...options,
       };
 
       launchImageLibrary(defaultOptions, response => {
-        console.log(
-          '📁 Gallery Picker Response:',
-          JSON.stringify(response, null, 2),
-        );
-
         if (response.didCancel) {
           setError('User cancelled');
           setLoading(false);
@@ -99,7 +95,6 @@ export const useGalleryPicker = (): UseGalleryPickerReturn => {
             }),
           );
 
-          console.log('✅ Selected Media:', JSON.stringify(mediaData, null, 2));
           setSelectedMedia(mediaData.length === 1 ? mediaData[0] : mediaData);
         }
 
@@ -133,59 +128,96 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
   const isRecordingRef = useRef<boolean>(false);
 
   useEffect(() => {
-    const defaultOptions = {
-      sampleRate: 44100,
-      channels: 1,
-      bitsPerSample: 16,
-      audioSource: 6,
-      wavFile: 'recording.wav',
-    };
-
-    AudioRecord.init(defaultOptions);
-    console.log('🎙️ Audio Recorder Initialized');
-
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
       if (isRecordingRef.current) {
-        AudioRecord.stop();
+        try {
+          AudioRecord.stop();
+        } catch (e) {}
       }
     };
   }, []);
 
-  const startRecording = useCallback((options?: AudioRecorderOptions) => {
+  const startRecording = useCallback(async (options?: AudioRecorderOptions) => {
     try {
+      if (isRecordingRef.current) {
+        console.warn('Already recording');
+        return;
+      }
+
+      // 1. Explicit Permission Check for Android (Crucial for newer RN versions)
+      if (Platform.OS === 'android') {
+        const hasPermission = await PermissionsAndroid.check(
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        );
+        if (!hasPermission) {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+            {
+              title: 'Microphone Permission',
+              message: 'This app needs access to your microphone to record audio.',
+              buttonNeutral: 'Ask Me Later',
+              buttonNegative: 'Cancel',
+              buttonPositive: 'OK',
+            },
+          );
+          if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+            setError('Microphone permission denied');
+            return;
+          }
+        }
+      }
+
       setError(null);
       setAudioPath(null);
       setRecordingDuration(0);
 
-      if (options) {
-        const mergedOptions = {
-          sampleRate: 44100,
-          channels: 1,
-          bitsPerSample: 16,
-          audioSource: 6,
-          wavFile: 'recording.wav',
-          ...options,
-        };
-        AudioRecord.init(mergedOptions);
-      }
+      const mergedOptions = {
+        sampleRate: 44100,
+        channels: 1,
+        bitsPerSample: 16,
+        audioSource: 6,
+        wavFile: 'recording.wav',
+        ...options,
+      };
 
+      // 2. Initialize (Don't rely on await due to RN Bridge race conditions)
+      AudioRecord.init(mergedOptions);
+
+      // 3. Hard delay to guarantee the native module finishes its setup queue 
+      // before the start() command arrives on the native side.
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // 4. Start recording safely
       AudioRecord.start();
+      
       isRecordingRef.current = true;
       setIsRecording(true);
+
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
 
       timerRef.current = setInterval(() => {
         setRecordingDuration(prev => prev + 1);
       }, 1000);
     } catch (err) {
       const error = err as Error;
+      console.error('Failed to start recording:', error);
       setError(error.message);
+      setIsRecording(false);
+      isRecordingRef.current = false;
     }
   }, []);
 
   const stopRecording = useCallback(async (): Promise<string | null> => {
+    if (!isRecordingRef.current) {
+      console.warn('Not recording');
+      return null;
+    }
+
     try {
       const path = await AudioRecord.stop();
       isRecordingRef.current = false;
@@ -201,6 +233,7 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
       return path;
     } catch (err) {
       const error = err as Error;
+      console.error('Failed to stop recording:', error);
       setError(error.message);
       setIsRecording(false);
       isRecordingRef.current = false;

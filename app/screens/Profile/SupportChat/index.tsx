@@ -32,7 +32,6 @@ import {
   ICON_SEND_RADIUS,
   ICON_RECIEVER_RADIUS,
   ICON_DELETE,
-  ICON_EDIT_CHAT,
 } from '@assets/icons';
 import type {Message} from 'types/support-chat';
 import {AppImage} from '@global-components';
@@ -60,13 +59,10 @@ const WAVEFORM_HEIGHTS = Array.from(
   () => Math.floor(Math.random() * 16) + 6,
 );
 
-// ✅ WhatsApp-like Tick Component
 const MessageStatusTick = ({status}: {status?: string | null}) => {
   if (!status) return null;
-
   const tickColor = status === 'read' ? '#34B7F1' : COLORS.GRAY_TEXT_COLOR;
   const isSent = status === 'sent';
-
   const tickMark = (
     <View
       style={{
@@ -136,8 +132,6 @@ const styles = StyleSheet.create({
   empty: {flex: 1, justifyContent: 'center', alignItems: 'center'},
   emptyText: {color: COLORS.GRAY_TEXT_COLOR, fontSize: 15},
   loader: {paddingVertical: SPACING.m},
-  dotRight: {right: -4},
-  dotLeft: {left: -4},
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -253,6 +247,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: SPACING.xxs,
+    marginTop: 26,
   },
   waveform: {
     flexDirection: 'row',
@@ -262,9 +257,11 @@ const styles = StyleSheet.create({
   },
   waveBar: {width: scaleSize(3), borderRadius: scaleSize(1.5)},
   audioDurationText: {
+    alignSelf: 'flex-start',
     fontSize: scaleSize(10),
     color: COLORS.GRAY_TEXT_COLOR,
     fontFamily: FONT_FAMILY.Medium,
+    marginRight: 24,
   },
   modalOverlay: {flex: 1, backgroundColor: 'rgba(0,0,0,0.95)'},
   modalImage: {width: '100%', height: '80%', resizeMode: 'contain'},
@@ -350,7 +347,6 @@ const SupportChat = () => {
   const flatListRef = useRef<FlatList>(null);
   const [messages, setMessages] = useState<Message[]>([]);
 
-  // Use refs to track IDs without triggering re-renders
   const messagesRef = useRef<Message[]>([]);
   const processedSocketIdsRef = useRef<Set<number>>(new Set());
 
@@ -412,17 +408,13 @@ const SupportChat = () => {
   const [menuVisibleId, setMenuVisibleId] = useState<number | null>(null);
   const [deletedIds, setDeletedIds] = useState<Set<number>>(new Set());
 
-  // Sync ref with state so we can read it safely in useFocusEffect
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
 
-  // ✅ FIX: Optimistically update local state immediately so it doesn't "look unseen"
   const handleMarkAsRead = useCallback(
     async (messageIds: number[]) => {
       if (!conversationId || messageIds.length === 0) return;
-
-      // Instantly update local UI to 'read'
       setMessages(prev =>
         prev.map(msg =>
           messageIds.includes(msg.id) && msg.sender_type !== senderType
@@ -438,7 +430,6 @@ const SupportChat = () => {
         }).unwrap();
       } catch (error) {
         console.log('Mark as read error:', error);
-        // Revert back to 'delivered' if the API fails
         setMessages(prev =>
           prev.map(msg =>
             messageIds.includes(msg.id) && msg.sender_type !== senderType
@@ -451,7 +442,6 @@ const SupportChat = () => {
     [conversationId, markMessagesAsRead, senderType],
   );
 
-  // Removed `messages` from dependency array. Reads from `messagesRef.current` instead.
   useFocusEffect(
     useCallback(() => {
       if (conversationId) {
@@ -489,7 +479,7 @@ const SupportChat = () => {
 
   useEffect(() => {
     hasMarkedAsRead.current = false;
-    processedSocketIdsRef.current = new Set(); // Reset socket tracking on convo change
+    processedSocketIdsRef.current = new Set();
   }, [conversationId]);
 
   const handleDeleteMessage = async (messageId: number) => {
@@ -504,13 +494,11 @@ const SupportChat = () => {
       setPage(1);
       processedPage.current = 0;
       refetch();
-      Toast.show({type: 'success', text1: 'Message deleted'});
-    } catch (error: any) {
       Toast.show({
-        type: 'error',
-        text1: error?.data?.error || 'Failed to delete message',
+        type: 'success',
+        text1: TEXT.MESSAGE_DELETED,
       });
-    }
+    } catch (error: any) {}
   };
 
   const handleUploadFile = useCallback(
@@ -592,14 +580,12 @@ const SupportChat = () => {
     if (!messagesData.data.pagination?.has_next_page) setHasMore(false);
   }, [messagesData, page]);
 
-  // Removed `messages` from dependency array. Uses `processedSocketIdsRef` to track new incoming messages.
   useEffect(() => {
     if (!socketMessages || socketMessages.length === 0) return;
 
     const incomingSocketMsgs = socketMessages as Message[];
     const newMsgsFromOthers: Message[] = [];
 
-    // Find truly NEW messages from others
     incomingSocketMsgs.forEach(socketMsg => {
       if (
         socketMsg.sender_type !== senderType &&
@@ -609,19 +595,16 @@ const SupportChat = () => {
       }
     });
 
-    // Update local state using functional updater (doesn't require `messages` dependency)
     setMessages(prev => {
       const prevIds = new Set(prev.map(m => m.id));
       let updated = [...prev];
 
       incomingSocketMsgs.forEach(socketMsg => {
         if (prevIds.has(socketMsg.id)) {
-          // If message already exists, UPDATE its status (Fixes Blue Ticks!)
           updated = updated.map(m =>
             m.id === socketMsg.id ? {...m, status: socketMsg.status} : m,
           );
         } else if (socketMsg.sender_type !== senderType) {
-          // If it's a new message from someone else, ADD it
           updated.push(socketMsg);
           processedSocketIdsRef.current.add(socketMsg.id);
         }
@@ -633,7 +616,6 @@ const SupportChat = () => {
       );
     });
 
-    // Side effects only for NEW incoming messages
     if (newMsgsFromOthers.length > 0) {
       setTimeout(() => flatListRef.current?.scrollToEnd({animated: true}), 100);
 
@@ -835,6 +817,7 @@ const SupportChat = () => {
                 {formatDuration(item.duration)}
               </Text>
             </View>
+
             {isPlaying && (
               <Video
                 ref={audioPlayerRef}
@@ -861,7 +844,8 @@ const SupportChat = () => {
         />
 
         <View style={styles.bubbleWrapper}>
-          {!isDeleted && (
+          {/* FIX: Added "isMe &&" to only show the menu on your own messages */}
+          {isMe && !isDeleted && (
             <TouchableOpacity
               style={styles.dotBtn}
               onPress={() => setMenuVisibleId(isMenuOpen ? null : item.id)}
@@ -909,7 +893,8 @@ const SupportChat = () => {
             </View>
           )}
 
-          {isMenuOpen && !isDeleted && (
+          {/* FIX: Added "isMe &&" to only show the popup on your own messages */}
+          {isMe && isMenuOpen && !isDeleted && (
             <View style={styles.popupMenu}>
               <TouchableOpacity
                 style={styles.menuItem}
@@ -930,7 +915,7 @@ const SupportChat = () => {
     if (isRecording) {
       await stopRecording();
     } else {
-      startRecording({
+      await startRecording({
         sampleRate: 44100,
         channels: 1,
         bitsPerSample: 16,
@@ -1006,9 +991,6 @@ const SupportChat = () => {
         showImage={true}
         openGallery={handlePickMedia}
         handleAudio={handleToggleRecording}
-        startRecording={startRecording}
-        stopRecording={stopRecording}
-        handleUploadFile={handleUploadFile}
         uploadedUrl={uploadedUrl}
         uploadedType={uploadedType}
         isUploading={isUploading}

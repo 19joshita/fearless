@@ -235,5 +235,7 @@ export default {
     'This section is where resources uploaded from website admin panel appear',
   IMPRINT_URL: 'https://www.fearlesscode.de/en/imprint/',
   PRIVACY_POLICY_URL: 'https://www.fearlesscode.de/en/privacy-policy/',
-  USER_LIST:"User List"
+  USER_LIST: 'User List',
+  MESSAGE_DELETED: 'Message deleted',
+  FAILED_TO_DELETE_MESSAGE: 'Failed to delete message',
 };

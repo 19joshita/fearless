@@ -237,5 +237,7 @@ export default {
     'In diesem Abschnitt erscheinen Ressourcen, die vom Website-Admin-Panel hochgeladen wurden.',
   IMPRINT_URL: 'https://www.fearlesscode.de/impressum/',
   PRIVACY_POLICY_URL: 'https://www.fearlesscode.de/datenschutz/',
-    USER_LIST:"User List"
+  USER_LIST: 'Benutzerliste',
+    MESSAGE_DELETED: 'Nachricht gelöscht',
+FAILED_TO_DELETE_MESSAGE: 'Nachricht konnte nicht gelöscht werden',
 };
