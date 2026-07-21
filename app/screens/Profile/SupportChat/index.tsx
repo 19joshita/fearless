@@ -9,6 +9,7 @@ import {
   Image,
   TouchableOpacity,
   Modal,
+  Pressable,
 } from 'react-native';
 import Video, {VideoRef} from 'react-native-video';
 import {AppView, ChatHeader, ChatInput} from '@components';
@@ -263,17 +264,45 @@ const styles = StyleSheet.create({
     fontFamily: FONT_FAMILY.Medium,
     marginRight: 24,
   },
-  modalOverlay: {flex: 1, backgroundColor: 'rgba(0,0,0,0.95)'},
-  modalImage: {width: '100%', height: '80%', resizeMode: 'contain'},
-  modalVideo: {width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000'},
+
+  // ✅ IMPROVED MODAL UI STYLES
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContentContainer: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  modalImage: {
+    width: '100%',
+    height: '80%',
+    resizeMode: 'contain',
+    marginHorizontal: SPACING.m,
+  },
+  modalVideo: {
+    width: '95%',
+    aspectRatio: 16 / 9,
+    backgroundColor: '#000',
+    borderRadius: SPACING.s,
+    overflow: 'hidden',
+    // These two center the loader perfectly
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   modalCloseBtn: {
     position: 'absolute',
-    top: SPACING.l,
-    right: SPACING.l,
-    width: scaleSize(32),
-    height: scaleSize(32),
-    borderRadius: scaleSize(16),
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    top: SPACING.xl,
+    right: SPACING.m,
+    width: scaleSize(36),
+    height: scaleSize(36),
+    borderRadius: scaleSize(18),
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
@@ -283,6 +312,7 @@ const styles = StyleSheet.create({
     fontSize: scaleSize(16),
     fontWeight: 'bold',
   },
+
   dotBtn: {
     position: 'absolute',
     top: 5,
@@ -368,6 +398,7 @@ const SupportChat = () => {
     url: string;
     type: 'image' | 'video';
   } | null>(null);
+  const [isModalVideoLoading, setIsModalVideoLoading] = useState(false);
   const audioPlayerRef = useRef<VideoRef>(null);
 
   const {height} = useKeyboardAnimation();
@@ -711,12 +742,17 @@ const SupportChat = () => {
   };
 
   const handlePlayAudio = (id: number | string, url: string) => {
-    setPlayingAudioId(playingAudioId === id ? null : id);
+    setPlayingAudioId(id);
   };
 
-  const openMediaModal = (url: string, type: 'image' | 'video') =>
+  const openMediaModal = (url: string, type: 'image' | 'video') => {
+    if (type === 'video') setIsModalVideoLoading(true);
     setMediaModal({url, type});
-  const closeMediaModal = () => setMediaModal(null);
+  };
+  const closeMediaModal = () => {
+    setMediaModal(null);
+    setIsModalVideoLoading(false);
+  };
 
   const renderMessage = ({item}: {item: Message}) => {
     const isMe = item.sender_type === senderType;
@@ -745,7 +781,7 @@ const SupportChat = () => {
         );
       }
 
-      if (item.message_type === 'video' && item.media_url) {
+      if (item.message_type === 'video' && item?.media_url) {
         return (
           <TouchableOpacity
             activeOpacity={0.9}
@@ -775,12 +811,12 @@ const SupportChat = () => {
         );
       }
 
-      if (item.message_type === 'audio' && item.media_url) {
+      if (item.message_type === 'audio' && item?.media_url) {
         const isPlaying = playingAudioId === item.id;
         return (
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => handlePlayAudio(item.id, item.media_url!)}
+            onPress={() => handlePlayAudio(item?.id, item.media_url!)}
             style={styles.audioContainer}>
             <View
               style={[
@@ -821,13 +857,29 @@ const SupportChat = () => {
             {isPlaying && (
               <Video
                 ref={audioPlayerRef}
-                source={{uri: item.media_url}}
+                source={{
+                  uri: item?.media_url,
+                }}
+                paused={false}
+                muted={false}
+                volume={1}
                 repeat={false}
+                ignoreSilentSwitch="ignore"
+                playWhenInactive={true}
                 playInBackground={false}
-                paused={!isPlaying}
-                onEnd={() => setPlayingAudioId(null)}
-                onError={() => setPlayingAudioId(null)}
-                style={{width: 0, height: 0, opacity: 0}}
+                progressUpdateInterval={100}
+                onEnd={() => {
+                  setPlayingAudioId(null);
+                }}
+                onError={error => {
+                  setPlayingAudioId(null);
+                }}
+                style={{
+                  position: 'absolute',
+                  width: 1,
+                  height: 1,
+                  opacity: 0.01,
+                }}
               />
             )}
           </TouchableOpacity>
@@ -844,7 +896,6 @@ const SupportChat = () => {
         />
 
         <View style={styles.bubbleWrapper}>
-          {/* FIX: Added "isMe &&" to only show the menu on your own messages */}
           {isMe && !isDeleted && (
             <TouchableOpacity
               style={styles.dotBtn}
@@ -893,7 +944,6 @@ const SupportChat = () => {
             </View>
           )}
 
-          {/* FIX: Added "isMe &&" to only show the popup on your own messages */}
           {isMe && isMenuOpen && !isDeleted && (
             <View style={styles.popupMenu}>
               <TouchableOpacity
@@ -998,27 +1048,20 @@ const SupportChat = () => {
         onRemoveMedia={handleRemoveMedia}
       />
       <Animated.View style={fakeView} />
-
       <Modal
         visible={!!mediaModal}
         transparent
         animationType="fade"
         onRequestClose={closeMediaModal}
         statusBarTranslucent>
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={closeMediaModal}>
-          <TouchableOpacity
-            activeOpacity={1}
-            style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}
-            //@ts-ignore
-            onStartShouldSetResponder={() => true as any}>
-            <TouchableOpacity
-              style={styles.modalCloseBtn}
-              onPress={closeMediaModal}>
+        <Pressable style={styles.modalOverlay} onPress={closeMediaModal}>
+          <Pressable
+            style={styles.modalContentContainer}
+            onPress={e => e.stopPropagation()}>
+            <Pressable style={styles.modalCloseBtn} onPress={closeMediaModal}>
               <Text style={styles.modalCloseBtnText}>X</Text>
-            </TouchableOpacity>
+            </Pressable>
+
             {mediaModal?.type === 'image' && (
               <Image
                 source={{uri: mediaModal.url}}
@@ -1026,20 +1069,40 @@ const SupportChat = () => {
                 resizeMode="contain"
               />
             )}
+
             {mediaModal?.type === 'video' && (
               <View style={styles.modalVideo}>
+                {isModalVideoLoading && (
+                  <ActivityIndicator
+                    size="large"
+                    color={COLORS.WHITE_COLOR}
+                    style={{position: 'absolute', zIndex: 10}}
+                  />
+                )}
+
                 <Video
                   key={mediaModal.url}
                   source={{uri: mediaModal.url}}
                   style={{width: '100%', height: '100%'}}
                   resizeMode="contain"
-                  controls
+                  controls={true}
                   paused={false}
+                  onLoadStart={() => setIsModalVideoLoading(true)}
+                  onReadyForDisplay={() => setIsModalVideoLoading(false)}
+                  onError={() => setIsModalVideoLoading(false)}
+                  bufferConfig={{
+                    minBufferMs: 500,
+                    maxBufferMs: 1500,
+                    //@ts-ignore
+                    playBufferMs: 250,
+                    bufferForPlaybackMs: 250,
+                    bufferForPlaybackAfterRebufferMs: 500,
+                  }}
                 />
               </View>
             )}
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </Pressable>
+        </Pressable>
       </Modal>
     </AppView>
   );

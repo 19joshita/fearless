@@ -1,4 +1,4 @@
-import {createApi, fetchBaseQuery} from '@reduxjs/toolkit/query/react';
+import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import {
   ENDPOINTS,
   METHOD,
@@ -6,11 +6,11 @@ import {
   getPrefsValue,
   setPrefsValue,
 } from '@utils';
-import {STORAGE} from '@constants';
+import { STORAGE } from '@constants';
 import Toast from 'react-native-toast-message';
-import {reset, setIsLogin} from './app-slice';
-import {translate} from '@localization';
-import {store} from './store';
+import { reset, setIsLogin } from './app-slice';
+import { translate } from '@localization';
+import { store } from './store';
 import type {
   GetAdminConversationsParams,
   GetAdminConversationsResponse,
@@ -39,7 +39,7 @@ import type {
 
 const baseQuery = fetchBaseQuery({
   baseUrl: ENDPOINTS?.BASE_URL + ENDPOINTS.SUFFIX,
-  prepareHeaders: async (headers, {endpoint}) => {
+  prepareHeaders: async (headers, { endpoint }) => {
     if (endpoint === 'uploadSupportChatFile') {
       headers.delete('Content-Type');
     } else {
@@ -107,7 +107,7 @@ export const supportChatSlice = createApi({
       GetAdminConversationsResponse,
       GetAdminConversationsParams
     >({
-      query: ({page, limit = 10}) => ({
+      query: ({ page, limit = 10 }) => ({
         url: ENDPOINTS.SUPPORT_CHAT_ADMIN_CONVERSATION,
         method: METHOD.GET,
         params: {
@@ -118,14 +118,14 @@ export const supportChatSlice = createApi({
       providesTags: result =>
         result?.data
           ? [
-              ...result.data.map(({conversation_id}) => ({
-                type: 'SupportChat' as const,
-                id: `Conversation-${conversation_id}`,
-              })),
-              {type: 'SupportChat', id: 'LIST'},
-            ]
-          : [{type: 'SupportChat', id: 'LIST'}],
-      serializeQueryArgs: ({endpointName}) => {
+            ...result.data.map(({ conversation_id }) => ({
+              type: 'SupportChat' as const,
+              id: `Conversation-${conversation_id}`,
+            })),
+            { type: 'SupportChat', id: 'LIST' },
+          ]
+          : [{ type: 'SupportChat', id: 'LIST' }],
+      serializeQueryArgs: ({ endpointName }) => {
         return endpointName;
       },
       merge: (currentCache, newCache) => {
@@ -147,7 +147,7 @@ export const supportChatSlice = createApi({
         url: ENDPOINTS.SUPPORT_CHAT_CONVERSATION,
         method: METHOD.POST,
       }),
-      invalidatesTags: [{type: 'SupportChat', id: 'LIST'}],
+      invalidatesTags: [{ type: 'SupportChat', id: 'LIST' }],
     }),
 
     // ==================== Get Messages ====================
@@ -155,7 +155,7 @@ export const supportChatSlice = createApi({
       GetMessagesResponse,
       GetMessagesParams
     >({
-      query: ({conversationId, page, limit = 20}) => ({
+      query: ({ conversationId, page, limit = 20 }) => ({
         url: `${ENDPOINTS.SUPPORT_CHAT_CONVERSATIONS}${conversationId}/messages`,
         method: METHOD.GET,
         params: {
@@ -163,10 +163,10 @@ export const supportChatSlice = createApi({
           limit,
         },
       }),
-      providesTags: (result, error, {conversationId}) => [
-        {type: 'SupportChat', id: `Messages-${conversationId}`},
+      providesTags: (result, error, { conversationId }) => [
+        { type: 'SupportChat', id: `Messages-${conversationId}` },
       ],
-      serializeQueryArgs: ({endpointName, queryArgs}) => {
+      serializeQueryArgs: ({ endpointName, queryArgs }) => {
         return `${endpointName}-${queryArgs.conversationId}`;
       },
       merge: (currentCache, newCache) => {
@@ -196,14 +196,14 @@ export const supportChatSlice = createApi({
         method: METHOD.POST,
         body: params,
       }),
-      invalidatesTags: (result, error, {conversation_id}) => [
-        {type: 'SupportChat', id: 'LIST'},
-        {type: 'SupportChat', id: `Messages-${conversation_id}`},
-        {type: 'SupportChat', id: `Conversation-${conversation_id}`},
+      invalidatesTags: (result, error, { conversation_id }) => [
+        { type: 'SupportChat', id: 'LIST' },
+        { type: 'SupportChat', id: `Messages-${conversation_id}` },
+        { type: 'SupportChat', id: `Conversation-${conversation_id}` },
       ],
       async onQueryStarted(
-        {conversation_id, ...messageData},
-        {dispatch, queryFulfilled},
+        { conversation_id, ...messageData },
+        { dispatch, queryFulfilled },
       ) {
         try {
           await queryFulfilled;
@@ -232,16 +232,16 @@ export const supportChatSlice = createApi({
         method: METHOD.POST,
         body: params,
       }),
-      invalidatesTags: (result, error, {conversation_id}) => [
-        {type: 'SupportChat', id: 'LIST'},
-        {type: 'SupportChat', id: `Conversation-${conversation_id}`},
-        {type: 'SupportChat', id: `Messages-${conversation_id}`},
+      invalidatesTags: (result, error, { conversation_id }) => [
+        { type: 'SupportChat', id: 'LIST' },
+        { type: 'SupportChat', id: `Conversation-${conversation_id}` },
+        { type: 'SupportChat', id: `Messages-${conversation_id}` },
       ],
-      async onQueryStarted({conversation_id}, {dispatch, queryFulfilled}) {
+      async onQueryStarted({ conversation_id }, { dispatch, queryFulfilled }) {
         const patchResult = dispatch(
           supportChatSlice.util.updateQueryData(
             'getSupportChatMessages',
-            {conversationId: conversation_id, page: 1, limit: 20},
+            { conversationId: conversation_id, page: 1, limit: 20 },
             draft => {
               if (draft.data) {
                 draft.data.messages = draft.data.messages.map(m => ({
@@ -256,7 +256,7 @@ export const supportChatSlice = createApi({
         const patchAdminList = dispatch(
           supportChatSlice.util.updateQueryData(
             'getAdminConversations',
-            {page: 1, limit: 10},
+            { page: 1, limit: 10 },
             draft => {
               if (draft.data) {
                 const convo = draft.data.find(
@@ -284,30 +284,30 @@ export const supportChatSlice = createApi({
       MarkMessagesAsReadResponse,
       MarkMessagesAsReadParams
     >({
-      query: ({conversationId, message_ids}) => ({
+      query: ({ conversationId, message_ids }) => ({
         url: `support-chat/${conversationId}/mark-read/`,
         method: METHOD.POST,
-        body: {message_ids},
+        body: { message_ids },
       }),
-      invalidatesTags: (result, error, {conversationId}) => [
-        {type: 'SupportChat', id: `Messages-${conversationId}`},
-        {type: 'SupportChat', id: `Conversation-${conversationId}`},
-        {type: 'SupportChat', id: 'LIST'},
+      invalidatesTags: (result, error, { conversationId }) => [
+        { type: 'SupportChat', id: `Messages-${conversationId}` },
+        { type: 'SupportChat', id: `Conversation-${conversationId}` },
+        { type: 'SupportChat', id: 'LIST' },
       ],
       async onQueryStarted(
-        {conversationId, message_ids},
-        {dispatch, queryFulfilled},
+        { conversationId, message_ids },
+        { dispatch, queryFulfilled },
       ) {
         // Optimistic update: Mark specific messages as read in cache
         const patchMessages = dispatch(
           supportChatSlice.util.updateQueryData(
             'getSupportChatMessages',
-            {conversationId, page: 1, limit: 20},
+            { conversationId, page: 1, limit: 20 },
             draft => {
               if (draft.data?.messages) {
                 const messageIdsSet = new Set(message_ids);
                 draft.data.messages = draft.data.messages.map(m =>
-                  messageIdsSet.has(m.id) ? {...m, status: 'read' as const} : m,
+                  messageIdsSet.has(m.id) ? { ...m, status: 'read' as const } : m,
                 );
               }
             },
@@ -318,7 +318,7 @@ export const supportChatSlice = createApi({
         const patchAdminList = dispatch(
           supportChatSlice.util.updateQueryData(
             'getAdminConversations',
-            {page: 1, limit: 10},
+            { page: 1, limit: 10 },
             draft => {
               if (draft.data) {
                 const convo = draft.data.find(
@@ -353,10 +353,10 @@ export const supportChatSlice = createApi({
         method: METHOD.POST,
         body,
       }),
-      invalidatesTags: (result, error, {conversation_id}) => [
-        {type: 'SupportChat', id: 'LIST'},
-        {type: 'SupportChat', id: `Conversation-${conversation_id}`},
-        {type: 'SupportChat', id: `Messages-${conversation_id}`},
+      invalidatesTags: (result, error, { conversation_id }) => [
+        { type: 'SupportChat', id: 'LIST' },
+        { type: 'SupportChat', id: `Conversation-${conversation_id}` },
+        { type: 'SupportChat', id: `Messages-${conversation_id}` },
       ],
     }),
     // ==================== Get Unread Count =====================
@@ -365,7 +365,7 @@ export const supportChatSlice = createApi({
         url: ENDPOINTS.SUPPORT_CHAT_UNREAD_COUNT,
         method: METHOD.GET,
       }),
-      providesTags: [{type: 'SupportChat', id: 'UnreadCount'}],
+      providesTags: [{ type: 'SupportChat', id: 'UnreadCount' }],
     }),
     // ==================== Register Device Token ====================
     registerDeviceToken: builder.mutation<
@@ -382,22 +382,22 @@ export const supportChatSlice = createApi({
     // ==================== Delete Message ====================
     deleteMessage: builder.mutation<DeleteMessageResponse, DeleteMessageParams>(
       {
-        query: ({messageId}) => ({
+        query: ({ messageId }) => ({
           url: `support-chat/messages/${messageId}`,
           method: METHOD.DELETE,
         }),
-        invalidatesTags: (result, error, {conversationId}) => [
-          {type: 'SupportChat', id: `Messages-${conversationId}`},
-          {type: 'SupportChat', id: 'LIST'},
+        invalidatesTags: (result, error, { conversationId }) => [
+          { type: 'SupportChat', id: `Messages-${conversationId}` },
+          { type: 'SupportChat', id: 'LIST' },
         ],
         async onQueryStarted(
-          {messageId, conversationId},
-          {dispatch, queryFulfilled},
+          { messageId, conversationId },
+          { dispatch, queryFulfilled },
         ) {
           const patchResult = dispatch(
             supportChatSlice.util.updateQueryData(
               'getSupportChatMessages',
-              {conversationId, page: 1, limit: 20},
+              { conversationId, page: 1, limit: 20 },
               draft => {
                 if (draft.data?.messages) {
                   draft.data.messages = draft.data.messages.filter(
@@ -422,13 +422,13 @@ export const supportChatSlice = createApi({
       UpdateMessageResponse,
       UpdateMessageParams
     >({
-      query: ({messageId, ...body}) => ({
+      query: ({ messageId, ...body }) => ({
         url: `support-chat/messages/${messageId}`,
         method: METHOD.PUT,
         body: body,
       }),
-      invalidatesTags: (result, error, {conversationId}) => [
-        {type: 'SupportChat', id: `Messages-${conversationId}`},
+      invalidatesTags: (result, error, { conversationId }) => [
+        { type: 'SupportChat', id: `Messages-${conversationId}` },
       ],
     }),
 
@@ -437,20 +437,20 @@ export const supportChatSlice = createApi({
       DeleteConversationResponse,
       DeleteConversationParams
     >({
-      query: ({conversationId}) => ({
+      query: ({ conversationId }) => ({
         url: `support-chat/conversations/${conversationId}`,
         method: METHOD.DELETE,
       }),
-      invalidatesTags: (result, error, {conversationId}) => [
-        {type: 'SupportChat', id: 'LIST'},
-        {type: 'SupportChat', id: `Conversation-${conversationId}`},
-        {type: 'SupportChat', id: `Messages-${conversationId}`},
+      invalidatesTags: (result, error, { conversationId }) => [
+        { type: 'SupportChat', id: 'LIST' },
+        { type: 'SupportChat', id: `Conversation-${conversationId}` },
+        { type: 'SupportChat', id: `Messages-${conversationId}` },
       ],
-      async onQueryStarted({conversationId}, {dispatch, queryFulfilled}) {
+      async onQueryStarted({ conversationId }, { dispatch, queryFulfilled }) {
         const patchResult = dispatch(
           supportChatSlice.util.updateQueryData(
             'getAdminConversations',
-            {page: 1, limit: 10},
+            { page: 1, limit: 10 },
             draft => {
               if (draft.data) {
                 draft.data = draft.data.filter(

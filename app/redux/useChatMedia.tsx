@@ -1,5 +1,5 @@
 // @redux/useChatMedia.ts
-import {useState, useCallback, useRef, useEffect} from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   launchImageLibrary,
   ImageLibraryOptions,
@@ -128,6 +128,23 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
   const isRecordingRef = useRef<boolean>(false);
 
   useEffect(() => {
+    // ✅ FIX: Pre-initialize the audio recorder the moment the hook/screen loads.
+    // This removes the delay completely.
+    const defaultOptions = {
+      sampleRate: 44100,
+      channels: 1,
+      bitsPerSample: 16,
+      audioSource: 6,
+      wavFile: 'recording.wav',
+    };
+
+    try {
+      AudioRecord.init(defaultOptions);
+    } catch (e) {
+      console.warn('Failed to pre-init audio recorder:', e);
+    }
+
+    // Cleanup when the component unmounts
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -135,7 +152,9 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
       if (isRecordingRef.current) {
         try {
           AudioRecord.stop();
-        } catch (e) {}
+        } catch (e) {
+          // Silently catch
+        }
       }
     };
   }, []);
@@ -147,7 +166,7 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
         return;
       }
 
-      // 1. Explicit Permission Check for Android (Crucial for newer RN versions)
+      // 1. Explicit Permission Check for Android
       if (Platform.OS === 'android') {
         const hasPermission = await PermissionsAndroid.check(
           PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
@@ -174,25 +193,22 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
       setAudioPath(null);
       setRecordingDuration(0);
 
-      const mergedOptions = {
-        sampleRate: 44100,
-        channels: 1,
-        bitsPerSample: 16,
-        audioSource: 6,
-        wavFile: 'recording.wav',
-        ...options,
-      };
+      // 2. Only re-initialize if you are passing custom options dynamically
+      if (options) {
+        const mergedOptions = {
+          sampleRate: 44100,
+          channels: 1,
+          bitsPerSample: 16,
+          audioSource: 6,
+          wavFile: 'recording.wav',
+          ...options,
+        };
+        AudioRecord.init(mergedOptions);
+      }
 
-      // 2. Initialize (Don't rely on await due to RN Bridge race conditions)
-      AudioRecord.init(mergedOptions);
-
-      // 3. Hard delay to guarantee the native module finishes its setup queue 
-      // before the start() command arrives on the native side.
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      // 4. Start recording safely
+      // 3. Start recording instantly (No setTimeout delay!)
       AudioRecord.start();
-      
+
       isRecordingRef.current = true;
       setIsRecording(true);
 
@@ -228,7 +244,6 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
         timerRef.current = null;
       }
 
-      console.log('📁 Audio path:', path);
       setAudioPath(path);
       return path;
     } catch (err) {

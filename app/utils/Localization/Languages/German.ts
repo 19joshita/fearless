@@ -240,5 +240,5 @@ export default {
   USER_LIST: 'Benutzerliste',
   MESSAGE_DELETED: 'Nachricht gelöscht',
   FAILED_TO_DELETE_MESSAGE: 'Nachricht konnte nicht gelöscht werden',
-  LOGIN_SUCCESS: 'Sie haben sich erfolgreich angemeldet.',
+  LOGIN_SUCCESS: 'Du hast Dich erfolgreich angemeldet.',
 };
