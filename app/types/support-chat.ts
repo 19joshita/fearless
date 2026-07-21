@@ -60,7 +60,7 @@ export interface Message {
   media_url: string | null;
   thumbnail: string | null;
   duration: number | null;
-  status: MessageStatus; 
+  status: MessageStatus;
   created_at: string;
   updated_at?: string;
 }
@@ -175,7 +175,7 @@ export interface UpdateMessageResponse {
 
 export interface DeleteConversationParams {
   conversationId: number;
-    messageId: string;
+  messageId: string;
   is_deleted?: boolean;
 }
 
@@ -189,6 +189,14 @@ export interface MarkMessagesAsReadParams {
 }
 
 export interface MarkMessagesAsReadResponse {
+  success: boolean;
+  message: string;
+}
+export interface ReadConversationByIdParams {
+  conversation_id: string;
+}
+
+export interface ReadConversationByIdResponse {
   success: boolean;
   message: string;
 }

@@ -121,7 +121,6 @@ export const useSupportChatSocket = (
           });
         } else if (response.event === 'presence') {
           const presence = response.data as PresenceData;
-          console.log('🟢 Presence Update:', presence);
           setPresenceMap(prev => ({
             ...prev,
             [presence.user_id]: presence.status,

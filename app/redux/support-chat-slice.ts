@@ -33,6 +33,8 @@ import type {
   DeleteConversationResponse,
   MarkMessagesAsReadParams,
   MarkMessagesAsReadResponse,
+  ReadConversationByIdResponse,
+  ReadConversationByIdParams,
 } from 'types/support-chat';
 
 const baseQuery = fetchBaseQuery({
@@ -277,7 +279,7 @@ export const supportChatSlice = createApi({
       },
     }),
 
-    // ==================== ✅ NEW: Mark Specific Messages As Read ====================
+    // ====================  NEW: Mark Specific Messages As Read ====================
     markMessagesAsRead: builder.mutation<
       MarkMessagesAsReadResponse,
       MarkMessagesAsReadParams
@@ -342,7 +344,21 @@ export const supportChatSlice = createApi({
         }
       },
     }),
-
+    readConversation: builder.mutation<
+      ReadConversationByIdResponse,
+      ReadConversationByIdParams
+    >({
+      query: body => ({
+        url: ENDPOINTS.SUPPORT_CHAT_READ,
+        method: METHOD.POST,
+        body,
+      }),
+      invalidatesTags: (result, error, {conversation_id}) => [
+        {type: 'SupportChat', id: 'LIST'},
+        {type: 'SupportChat', id: `Conversation-${conversation_id}`},
+        {type: 'SupportChat', id: `Messages-${conversation_id}`},
+      ],
+    }),
     // ==================== Get Unread Count =====================
     getUnreadCount: builder.query<UnreadCountResponse, void>({
       query: () => ({
@@ -465,6 +481,7 @@ export const {
   useUploadSupportChatFileMutation,
   useMarkConversationAsReadMutation,
   useMarkMessagesAsReadMutation,
+  useReadConversationMutation,
   useGetUnreadCountQuery,
   useLazyGetUnreadCountQuery,
   useRegisterDeviceTokenMutation,
