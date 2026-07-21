@@ -238,6 +238,7 @@ export default {
   IMPRINT_URL: 'https://www.fearlesscode.de/impressum/',
   PRIVACY_POLICY_URL: 'https://www.fearlesscode.de/datenschutz/',
   USER_LIST: 'Benutzerliste',
-    MESSAGE_DELETED: 'Nachricht gelöscht',
-FAILED_TO_DELETE_MESSAGE: 'Nachricht konnte nicht gelöscht werden',
+  MESSAGE_DELETED: 'Nachricht gelöscht',
+  FAILED_TO_DELETE_MESSAGE: 'Nachricht konnte nicht gelöscht werden',
+  LOGIN_SUCCESS: 'Sie haben sich erfolgreich angemeldet.',
 };

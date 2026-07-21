@@ -238,4 +238,5 @@ export default {
   USER_LIST: 'User List',
   MESSAGE_DELETED: 'Message deleted',
   FAILED_TO_DELETE_MESSAGE: 'Failed to delete message',
+  LOGIN_SUCCESS: 'You have successfully logged in.',
 };

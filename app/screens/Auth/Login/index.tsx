@@ -48,7 +48,6 @@ const Login: FC = () => {
         email: formik.values.emailAddress,
         password: formik.values.password,
       }).unwrap();
-      console.log(response, 'response');
       if (response?.success) {
         // Login successful
         setPrefsValue(STORAGE.TOKEN, response?.token);
@@ -56,8 +55,8 @@ const Login: FC = () => {
         dispatch(setIsLogin(true));
         dispatch(setUserInfo(response?.data));
         Toast.show({
-          text1: response?.message,
           type: 'success',
+          text1: TEXT.LOGIN_SUCCESS,
         });
       } else {
         // API returned an error
