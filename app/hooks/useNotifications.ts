@@ -1,5 +1,5 @@
 import {useEffect} from 'react';
-import {Platform} from 'react-native'; 
+import {Platform} from 'react-native';
 import messaging, {
   FirebaseMessagingTypes,
 } from '@react-native-firebase/messaging';
@@ -11,18 +11,14 @@ import {STORAGE} from '@constants';
 type NotificationData = Record<string, string>;
 const CHANNEL_ID = 'default';
 
-// ==========================================
 // PENDING NOTIFICATION STATE (FOR KILLED APP)
-// ==========================================
 let pendingNotificationData: any = null;
 export const getPendingNotification = () => pendingNotificationData;
 export const clearPendingNotification = () => {
   pendingNotificationData = null;
 };
 
-// ==========================================
 // MAIN HOOK
-// ==========================================
 const useNotifications = () => {
   useEffect(() => {
     let unsubscribeForeground: (() => void) | undefined;
@@ -33,19 +29,17 @@ const useNotifications = () => {
     const setup = async () => {
       await createChannel();
 
-      // ✅ Calls the OS permission directly. 
-      // The OS natively shows this popup ONLY on first install.
       const hasPermission = await requestPermission();
-      
+
       if (hasPermission) {
-        // Get token and save to storage for RootNavigation to use
         const token = await getFCMToken();
         if (token) {
           await setPrefsValue(STORAGE.FCM_TOKEN, token);
         }
       }
 
-      checkInitialNotification();
+      //  FIX 1: Added 'await' to prevent race conditions with RootNavigation
+      await checkInitialNotification();
 
       unsubscribeForeground = messaging().onMessage(onForegroundMessage);
 
@@ -67,7 +61,7 @@ const useNotifications = () => {
       unsubscribeToken = messaging().onTokenRefresh(async token => {
         console.log('New FCM Token:', token);
         await setPrefsValue(STORAGE.FCM_TOKEN, token);
-        await setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, ''); // Force API call
+        await setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, '');
       });
     };
 
@@ -84,9 +78,7 @@ const useNotifications = () => {
 
 export default useNotifications;
 
-// ==========================================
 // SETUP FUNCTIONS
-// ==========================================
 async function createChannel() {
   if (Platform.OS !== 'android') return;
   await notifee.createChannel({
@@ -97,11 +89,14 @@ async function createChannel() {
 }
 
 async function requestPermission() {
-  await notifee.requestPermission();
+  if (Platform.OS === 'android') {
+    await notifee.requestPermission();
+  }
   const status = await messaging().requestPermission();
   const enabled =
     status === messaging.AuthorizationStatus.AUTHORIZED ||
     status === messaging.AuthorizationStatus.PROVISIONAL;
+
   console.log('Notification Permission:', enabled);
   return enabled;
 }
@@ -112,9 +107,7 @@ async function getFCMToken() {
   return token;
 }
 
-// ==========================================
 // NOTIFICATION HANDLERS
-// ==========================================
 async function checkInitialNotification() {
   const remoteMessage = await messaging().getInitialNotification();
   if (remoteMessage) {
@@ -135,10 +128,15 @@ async function onForegroundMessage(
       channelId: CHANNEL_ID,
       pressAction: {id: 'default'},
     },
+    // ⚠️ FIX 2: Added iOS config so it actually makes a sound and shows a banner in foreground
+    ios: {
+      sound: 'default',
+    },
   });
 }
 
-function handleNotification(data?: any) {
+// ⚠️ FIX 3: Exported this function so RootNavigation can use it for Killed State
+export function handleNotification(data?: any) {
   if (!data) return;
   console.log('Notification Data received:', data);
 

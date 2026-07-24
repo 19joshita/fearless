@@ -11,13 +11,10 @@ import Animated from 'react-native-reanimated';
 // Firebase background notification handler
 messaging().setBackgroundMessageHandler(async remoteMessage => {
   console.log('Background Notification:', remoteMessage);
-
-  console.log(
-    'Background Notification Data:',
-    JSON.stringify(remoteMessage.data),
-  );
+  console.log('Background Notification Data:', JSON.stringify(remoteMessage.data));
 });
 
+// Font scaling configuration
 if (Text.defaultProps) {
   Text.defaultProps.allowFontScaling = false;
 } else {

@@ -151,11 +151,11 @@ export const supportChatSlice = createApi({
     }),
 
     // ==================== Get Messages ====================
-    getSupportChatMessages: builder.query<
+       getSupportChatMessages: builder.query<
       GetMessagesResponse,
       GetMessagesParams
     >({
-      query: ({ conversationId, page, limit = 20 }) => ({
+      query: ({conversationId, page, limit}) => ({
         url: `${ENDPOINTS.SUPPORT_CHAT_CONVERSATIONS}${conversationId}/messages`,
         method: METHOD.GET,
         params: {
@@ -163,27 +163,16 @@ export const supportChatSlice = createApi({
           limit,
         },
       }),
-      providesTags: (result, error, { conversationId }) => [
-        { type: 'SupportChat', id: `Messages-${conversationId}` },
+      providesTags: (result, error, {conversationId}) => [
+        {type: 'SupportChat', id: `Messages-${conversationId}`},
       ],
-      serializeQueryArgs: ({ endpointName, queryArgs }) => {
-        return `${endpointName}-${queryArgs.conversationId}`;
+      // FIX 1: Add limit to the cache key so RTK Query actually fetches when limit increases
+      serializeQueryArgs: ({endpointName, queryArgs}) => {
+        return `${endpointName}-${queryArgs.conversationId}-${queryArgs.limit || 20}`;
       },
-      merge: (currentCache, newCache) => {
-        if (newCache.data?.messages) {
-          const existingIds = new Set(
-            currentCache.data?.messages?.map(m => m.id) || [],
-          );
-          const newMessages = newCache.data.messages.filter(
-            m => !existingIds.has(m.id),
-          );
-          currentCache.data = {
-            ...currentCache.data,
-            ...newCache.data,
-            messages: [...newMessages, ...(currentCache.data?.messages || [])],
-          };
-        }
-      },
+      // FIX 2: Removed the 'merge' function. 
+      // The component now replaces the entire messages array when limit changes,
+      // so merging old+new cache data here will cause duplicate messages.
     }),
 
     // ==================== Send Message ====================

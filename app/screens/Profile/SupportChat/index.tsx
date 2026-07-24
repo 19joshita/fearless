@@ -1,4 +1,5 @@
 import React, {useRef, useState, useEffect, useCallback} from 'react';
+
 import {
   View,
   Text,
@@ -10,7 +11,10 @@ import {
   TouchableOpacity,
   Modal,
   Pressable,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
+
 import Video, {VideoRef} from 'react-native-video';
 import {AppView, ChatHeader, ChatInput} from '@components';
 import {COLORS, FONT_FAMILY, FONT_VARIENTS, scaleSize, SPACING} from '@theme';
@@ -20,6 +24,7 @@ import {RouteProp, useRoute, useFocusEffect} from '@react-navigation/native';
 import {useText} from '@localization';
 import {useAppSelector} from '@redux/reduxHook';
 import Toast from 'react-native-toast-message';
+
 import {
   supportChatSlice,
   useDeleteMessageMutation,
@@ -28,12 +33,14 @@ import {
   useUploadSupportChatFileMutation,
   useMarkMessagesAsReadMutation,
 } from '@redux/support-chat-slice';
+
 import {
   IMAGE_LOGO,
   ICON_SEND_RADIUS,
   ICON_RECIEVER_RADIUS,
   ICON_DELETE,
 } from '@assets/icons';
+
 import type {Message} from 'types/support-chat';
 import {AppImage} from '@global-components';
 import useKeyboardAnimation from './../../Home/Chat/UseKeyboardAnimation';
@@ -43,11 +50,13 @@ import {useSupportChatSocket} from './../../../hooks/useSupportChatSocket';
 import {store} from '@redux/store';
 
 // --- Types ---
+
 type SupportChatRouteParams = {
   mode: 'user' | 'admin';
   conversationId?: string;
   userName?: string;
 };
+
 type RouteProps = RouteProp<
   {SupportChat: SupportChatRouteParams},
   'SupportChat'
@@ -62,6 +71,7 @@ const WAVEFORM_HEIGHTS = Array.from(
 
 const MessageStatusTick = ({status}: {status?: string | null}) => {
   if (!status) return null;
+
   const tickColor = status === 'read' ? '#34B7F1' : COLORS.GRAY_TEXT_COLOR;
   const isSent = status === 'sent';
   const tickMark = (
@@ -92,13 +102,893 @@ const MessageStatusTick = ({status}: {status?: string | null}) => {
   );
 };
 
+// --- Component ---
+
+const SupportChat = () => {
+  const route = useRoute<RouteProps>();
+  const {selectedMedia, pickMedia, reset: resetGallery} = useGalleryPicker();
+  const [deleteSupportMessage] = useDeleteMessageMutation();
+  const [markMessagesAsRead] = useMarkMessagesAsReadMutation();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const {
+    audioPath,
+    isRecording,
+    recordingDuration,
+    startRecording,
+    stopRecording,
+    reset: resetAudio,
+  } = useAudioRecorder();
+
+  const {mode = 'user', conversationId, userName} = route.params ?? {};
+  const {TEXT} = useText();
+  const {bottom} = useSafeAreaInsets();
+  const profile = useAppSelector(state => state.app?.userInfo);
+  const flatListRef = useRef<FlatList>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+
+  const messagesRef = useRef<Message[]>([]);
+  const processedSocketIdsRef = useRef<Set<number>>(new Set());
+
+  const hasMarkedAsRead = useRef(false);
+
+  const isInitialLoad = useRef(true);
+  const isAdjustingScroll = useRef(false);
+  const prevScrollHeight = useRef(0);
+
+  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
+  const [uploadedType, setUploadedType] = useState<
+    'image' | 'video' | 'audio' | null
+  >(null);
+  const [uploadedDuration, setUploadedDuration] = useState<number | null>(null);
+
+  const [playingAudioId, setPlayingAudioId] = useState<number | string | null>(
+    null,
+  );
+  const [audioLoadingId, setAudioLoadingId] = useState<number | string | null>(
+    null,
+  );
+
+  const [mediaModal, setMediaModal] = useState<{
+    url: string;
+    type: 'image' | 'video';
+  } | null>(null);
+  const [isModalVideoLoading, setIsModalVideoLoading] = useState(false);
+  const audioPlayerRef = useRef<VideoRef>(null);
+
+  const {height} = useKeyboardAnimation();
+  const isTabScreen = useIsTabScreen();
+  const tabBarHeight = isTabScreen ? scaleSize(70) : 0;
+  const fakeView = useAnimatedStyle(
+    () => ({
+      height: Math.abs(height.value) - (tabBarHeight + bottom),
+      marginBottom: isTabScreen ? 0 : bottom,
+    }),
+    [bottom, tabBarHeight],
+  );
+
+  const {messages: socketMessages, presenceMap} = useSupportChatSocket(
+    conversationId ?? null,
+  );
+
+  const [sendMessage] = useSendSupportMessageMutation();
+  const [uploadFile, {isLoading: isUploading}] =
+    useUploadSupportChatFileMutation();
+
+  // ==========================================
+  // PAGINATION STATE
+  // Starts at 20, increases by 20 on each scroll to top
+  // ==========================================
+  const [limit, setLimit] = useState(20);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // API CALL: page is always 1, only limit changes
+  const {
+    data: messagesData,
+    isFetching: isApiFetching,
+    refetch,
+  } = useGetSupportChatMessagesQuery(
+    {conversationId: conversationId ?? '', page: 1, limit},
+    {skip: !conversationId},
+  );
+
+  const participants = messagesData?.data?.participants ?? [];
+  const senderType = mode === 'admin' ? 'admin' : 'user';
+  const otherParticipant = participants.find(p => p.role !== senderType);
+
+  const isOtherUserOnline = otherParticipant?.id
+    ? presenceMap[otherParticipant.id] === 'online'
+    : false;
+
+  const [menuVisibleId, setMenuVisibleId] = useState<number | null>(null);
+  const [deletedIds, setDeletedIds] = useState<Set<number>>(new Set());
+
+  // API tells us if there are more older messages to load
+  const hasMore = messagesData?.data?.pagination?.has_next_page ?? false;
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  const handleMarkAsRead = useCallback(
+    async (messageIds: number[]) => {
+      if (!conversationId || messageIds.length === 0) return;
+      setMessages(prev =>
+        prev.map(msg =>
+          messageIds.includes(msg.id) && msg.sender_type !== senderType
+            ? {...msg, status: 'read' as const}
+            : msg,
+        ),
+      );
+
+      try {
+        await markMessagesAsRead({
+          conversationId: conversationId,
+          message_ids: messageIds,
+        }).unwrap();
+      } catch (error) {
+        console.log('Mark as read error:', error);
+        setMessages(prev =>
+          prev.map(msg =>
+            messageIds.includes(msg.id) && msg.sender_type !== senderType
+              ? {...msg, status: 'delivered' as const}
+              : msg,
+          ),
+        );
+      }
+    },
+    [conversationId, markMessagesAsRead, senderType],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (conversationId) {
+        const timer = setTimeout(() => {
+          const currentMessages = messagesRef.current;
+          const unreadIds = currentMessages
+            .filter(m => m.sender_type !== senderType && m.status !== 'read')
+            .map(m => m.id);
+          if (unreadIds.length > 0) {
+            handleMarkAsRead(unreadIds);
+          }
+        }, 500);
+        return () => clearTimeout(timer);
+      }
+      return () => {};
+    }, [conversationId, handleMarkAsRead, senderType]),
+  );
+
+  useEffect(() => {
+    if (
+      messagesData?.data?.messages &&
+      !hasMarkedAsRead.current &&
+      conversationId
+    ) {
+      const unreadIds = messagesData.data.messages
+        .filter(m => m.sender_type !== senderType && m.status !== 'read')
+        .map(m => m.id);
+
+      if (unreadIds.length > 0) {
+        handleMarkAsRead(unreadIds);
+      }
+      hasMarkedAsRead.current = true;
+    }
+  }, [messagesData, conversationId, senderType, handleMarkAsRead]);
+
+  // Reset everything when conversation changes
+  useEffect(() => {
+    hasMarkedAsRead.current = false;
+    processedSocketIdsRef.current = new Set();
+    setMessages([]);
+    setLimit(20);
+    isInitialLoad.current = true;
+    isAdjustingScroll.current = false;
+    prevScrollHeight.current = 0;
+    setIsLoadingMore(false);
+  }, [conversationId]);
+
+  const handleDeleteMessage = async (messageId: number) => {
+    setMenuVisibleId(null);
+    try {
+      await deleteSupportMessage({
+        messageId,
+        conversationId: Number(conversationId),
+      }).unwrap();
+      setDeletedIds(new Set());
+      setMessages([]);
+      setLimit(20);
+      isInitialLoad.current = true;
+      refetch();
+      Toast.show({
+        type: 'success',
+        text1: TEXT.MESSAGE_DELETED,
+      });
+    } catch (error: any) {}
+  };
+
+  const handleUploadFile = useCallback(
+    async (uri: string, type: string, name: string): Promise<string | null> => {
+      if (!uri) return null;
+      const formData = new FormData();
+      formData.append('file', {
+        uri,
+        type,
+        name: name || 'media',
+      } as unknown as Blob);
+      try {
+        const response = await uploadFile(formData).unwrap();
+        setUploadedUrl(response.url);
+        return response.url;
+      } catch (error) {
+        Toast.show({type: 'error', text1: 'Failed to upload file'});
+        setUploadedType(null);
+        setUploadedDuration(null);
+        return null;
+      }
+    },
+    [uploadFile],
+  );
+
+  const handleRemoveMedia = useCallback(() => {
+    setUploadedUrl(null);
+    setUploadedType(null);
+    setUploadedDuration(null);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedMedia) return;
+    const media = Array.isArray(selectedMedia)
+      ? selectedMedia[0]
+      : selectedMedia;
+    if (!media?.uri) return;
+    const mimeType = media.type ?? 'image/jpeg';
+    const fileName =
+      media.fileName ?? `media.${mimeType.split('/')[1] ?? 'jpg'}`;
+    setUploadedType(mimeType.startsWith('video/') ? 'video' : 'image');
+    setUploadedDuration(
+      media.duration ? Math.round(media.duration / 1000) : null,
+    );
+    handleUploadFile(media.uri, mimeType, fileName);
+    resetGallery();
+  }, [selectedMedia, handleUploadFile, resetGallery]);
+
+  useEffect(() => {
+    if (!audioPath) return;
+    setUploadedType('audio');
+    setUploadedDuration(recordingDuration);
+    const formattedUri = audioPath.startsWith('file://')
+      ? audioPath
+      : `file://${audioPath}`;
+    handleUploadFile(formattedUri, 'audio/wav', 'recording.wav');
+    resetAudio();
+  }, [audioPath, handleUploadFile, resetAudio, recordingDuration]);
+
+  useEffect(() => {
+    if (isRefreshing && !isApiFetching) {
+      setIsRefreshing(false);
+    }
+  }, [isApiFetching, isRefreshing]);
+
+  // ==========================================
+  // SCROLL HANDLER
+  // When user reaches top (y <= 50), increase limit
+  // ==========================================
+  const handleScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (isAdjustingScroll.current || isLoadingMore) return;
+
+      const {contentOffset, contentSize} = event.nativeEvent;
+
+      if (contentOffset.y <= 50 && hasMore && !isApiFetching && !isRefreshing) {
+        isAdjustingScroll.current = true;
+        prevScrollHeight.current = contentSize.height;
+        setIsLoadingMore(true);
+        setLimit(prev => prev + 20);
+      }
+    },
+    [hasMore, isApiFetching, isRefreshing, isLoadingMore],
+  );
+
+  // ==========================================
+  // CONTENT SIZE CHANGE
+  // After new data loads, list gets taller at the top.
+  // Scroll down by that exact amount so user stays at same message.
+  // ==========================================
+  const handleContentSizeChange = useCallback(
+    (_width: number, newHeight: number) => {
+      if (isAdjustingScroll.current && prevScrollHeight.current > 0) {
+        const heightDiff = newHeight - prevScrollHeight.current;
+
+        if (heightDiff > 0) {
+          setTimeout(() => {
+            flatListRef.current?.scrollToOffset({
+              offset: heightDiff,
+              animated: false,
+            });
+            isAdjustingScroll.current = false;
+            prevScrollHeight.current = 0;
+            setIsLoadingMore(false);
+          }, 50);
+        } else {
+          isAdjustingScroll.current = false;
+          prevScrollHeight.current = 0;
+          setIsLoadingMore(false);
+        }
+      } else if (isInitialLoad.current && newHeight > 0) {
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({animated: false});
+          isInitialLoad.current = false;
+        }, 100);
+      }
+    },
+    [],
+  );
+
+  // ==========================================
+  // PROCESS API DATA
+  // API returns newest-first → reverse to oldest-first
+  // Keep temp messages (optimistic UI) at the bottom
+  // ==========================================
+  useEffect(() => {
+    if (!messagesData?.data?.messages) return;
+
+    const apiMessages = messagesData.data.messages;
+
+    setMessages(prev => {
+      const apiIds = new Set(apiMessages.map(m => m.id));
+      // Keep only local temp messages (id is a timestamp like 1721545678901)
+      const localOnlyMessages = prev.filter(
+        m => !apiIds.has(m.id) && m.id > 1000000000000,
+      );
+
+      // API returns newest first (345, 344, 343...)
+      // Reverse so oldest is at index 0 (top of screen)
+      const reversed = [...apiMessages].reverse();
+
+      return [...reversed, ...localOnlyMessages];
+    });
+
+    setIsLoadingMore(false);
+  }, [messagesData]);
+
+  // Socket message handling
+  useEffect(() => {
+    if (!socketMessages || socketMessages.length === 0) return;
+
+    const incomingSocketMsgs = socketMessages as Message[];
+    const newMsgsFromOthers: Message[] = [];
+
+    incomingSocketMsgs.forEach(socketMsg => {
+      if (
+        socketMsg.sender_type !== senderType &&
+        !processedSocketIdsRef.current.has(socketMsg.id)
+      ) {
+        newMsgsFromOthers.push(socketMsg);
+      }
+    });
+
+    setMessages(prev => {
+      const prevIds = new Set(prev.map(m => m.id));
+      let updated = [...prev];
+
+      incomingSocketMsgs.forEach(socketMsg => {
+        if (prevIds.has(socketMsg.id)) {
+          updated = updated.map(m =>
+            m.id === socketMsg.id ? {...m, status: socketMsg.status} : m,
+          );
+        } else if (socketMsg.sender_type !== senderType) {
+          updated.push(socketMsg);
+          processedSocketIdsRef.current.add(socketMsg.id);
+        }
+      });
+
+      return updated.sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      );
+    });
+
+    if (newMsgsFromOthers.length > 0) {
+      setTimeout(() => flatListRef.current?.scrollToEnd({animated: true}), 100);
+
+      if (conversationId) {
+        handleMarkAsRead(newMsgsFromOthers.map(m => m.id));
+      }
+
+      newMsgsFromOthers.forEach(newMessage => {
+        try {
+          store.dispatch(
+            supportChatSlice.util.updateQueryData(
+              'getAdminConversations',
+              {page: 1, limit: 20},
+              (draft: any) => {
+                if (!draft.data) return;
+                const index = draft.data.findIndex(
+                  (c: any) => c.conversation_id === newMessage.conversation_id,
+                );
+                if (index !== -1) {
+                  draft.data[index].unread_count = 0;
+                  draft.data[index].last_message = {
+                    message: newMessage.message,
+                    message_type: newMessage.message_type,
+                    sender_type: newMessage.sender_type,
+                    created_at: newMessage.created_at,
+                  };
+                  const [updatedItem] = draft.data.splice(index, 1);
+                  draft.data.unshift(updatedItem);
+                }
+              },
+            ),
+          );
+        } catch (e) {}
+      });
+    }
+  }, [socketMessages, senderType, conversationId, handleMarkAsRead]);
+
+  const scrollToBottom = () => {
+    setTimeout(() => flatListRef.current?.scrollToEnd({animated: true}), 150);
+  };
+
+  const handleSend = async (text: string) => {
+    const trimmedText = text.trim();
+    if (!trimmedText && !uploadedUrl) return;
+    if (!conversationId) return;
+
+    const tempId = Date.now();
+    const isMedia = !!uploadedUrl && !!uploadedType;
+    const messageType = isMedia ? uploadedType : 'text';
+
+    const tempMessage: Message = {
+      id: tempId,
+      conversation_id: Number(conversationId),
+      sender_id: 0,
+      receiver_id: 0,
+      sender_type: senderType,
+      message_type: messageType as Message['message_type'],
+      message: trimmedText,
+      media_url: isMedia ? uploadedUrl : null,
+      thumbnail: null,
+      duration: uploadedDuration,
+      status: 'sent',
+      created_at: new Date().toISOString(),
+    };
+
+    setMessages(prev => [...prev, tempMessage]);
+    scrollToBottom();
+
+    const payload: any = {
+      conversation_id: conversationId,
+      message_type: messageType,
+    };
+
+    if (isMedia) {
+      payload.media_url = uploadedUrl;
+      payload.duration = uploadedDuration;
+    } else {
+      payload.message = trimmedText;
+    }
+
+    try {
+      const result: any = await sendMessage(payload).unwrap();
+      if (result?.data) {
+        setMessages(prev =>
+          prev.map(m => (m.id === tempId ? result.data : m)),
+        );
+      }
+      if (isMedia) handleRemoveMedia();
+    } catch (error) {
+      console.log(error);
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+    }
+  };
+
+  const formatDuration = (seconds: number | null | undefined): string => {
+    if (!seconds) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handlePlayAudio = (id: number | string, url: string) => {
+    if (playingAudioId === id) {
+      setPlayingAudioId(null);
+      setAudioLoadingId(null);
+    } else {
+      setPlayingAudioId(id);
+      setAudioLoadingId(id);
+    }
+  };
+
+  const openMediaModal = (url: string, type: 'image' | 'video') => {
+    if (type === 'video') setIsModalVideoLoading(true);
+    setMediaModal({url, type});
+  };
+
+  const closeMediaModal = () => {
+    setMediaModal(null);
+    setIsModalVideoLoading(false);
+  };
+
+  const renderMessage = ({item}: {item: Message}) => {
+    const isMe = item.sender_type === senderType;
+    const isDeleted = deletedIds.has(item.id);
+    const isMenuOpen = menuVisibleId === item.id;
+
+    const avatarUri = isMe
+      ? profile?.image
+      : participants.find(p => p.id === item.sender_id)?.profile_image;
+
+    const renderMedia = () => {
+      if (isDeleted) return null;
+
+      if (item.message_type === 'image' && item.media_url) {
+        return (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => openMediaModal(item.media_url!, 'image')}
+            style={styles.mediaContainer}>
+            <Image
+              source={{uri: item.media_url}}
+              style={styles.mediaImage}
+              resizeMode="cover"
+            />
+          </TouchableOpacity>
+        );
+      }
+
+      if (item.message_type === 'video' && item?.media_url) {
+        return (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => openMediaModal(item.media_url!, 'video')}
+            style={styles.mediaContainer}>
+            <View style={styles.videoContainer}>
+              <Video
+                source={{uri: item.media_url}}
+                style={styles.mediaImage}
+                resizeMode="cover"
+                paused={true}
+                repeat={false}
+                muted={true}
+              />
+              <View style={styles.playIconWrapper}>
+                <View style={styles.playIcon} />
+              </View>
+              {item.duration ? (
+                <View style={styles.durationBadge}>
+                  <Text style={styles.durationText}>
+                    {formatDuration(item.duration)}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          </TouchableOpacity>
+        );
+      }
+
+      if (item.message_type === 'audio' && item?.media_url) {
+        const isPlaying = playingAudioId === item.id;
+        const isLoading = audioLoadingId === item.id;
+
+        return (
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => handlePlayAudio(item?.id, item.media_url!)}
+            style={styles.audioContainer}>
+            <View
+              style={[
+                styles.audioPlayBtn,
+                isPlaying &&
+                  !isLoading && {backgroundColor: COLORS.GRAY_TEXT_COLOR},
+              ]}>
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : isPlaying ? (
+                <View style={{flexDirection: 'row', gap: 2.5}}>
+                  <View style={styles.pauseBar} />
+                  <View style={styles.pauseBar} />
+                </View>
+              ) : (
+                <View style={styles.playSmallIcon} />
+              )}
+            </View>
+            <View style={styles.audioWaveContainer}>
+              <View style={styles.waveform}>
+                {WAVEFORM_HEIGHTS.map((h, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.waveBar,
+                      {
+                        height: h,
+                        backgroundColor: isPlaying
+                          ? COLORS.SECONDARY_COLOR
+                          : COLORS.GRAY_TEXT_COLOR,
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
+              <Text style={styles.audioDurationText}>
+                {formatDuration(item.duration)}
+              </Text>
+            </View>
+
+            {isPlaying && (
+              <Video
+                ref={audioPlayerRef}
+                source={{
+                  uri: item?.media_url,
+                }}
+                paused={false}
+                muted={false}
+                volume={1}
+                repeat={false}
+                ignoreSilentSwitch="ignore"
+                playWhenInactive={true}
+                playInBackground={false}
+                progressUpdateInterval={100}
+                onLoad={() => setAudioLoadingId(null)}
+                onEnd={() => {
+                  setPlayingAudioId(null);
+                  setAudioLoadingId(null);
+                }}
+                onError={() => {
+                  setPlayingAudioId(null);
+                  setAudioLoadingId(null);
+                }}
+                style={{
+                  position: 'absolute',
+                  width: 1,
+                  height: 1,
+                  opacity: 0.01,
+                }}
+              />
+            )}
+          </TouchableOpacity>
+        );
+      }
+      return null;
+    };
+
+    return (
+      <View style={[styles.row, isMe && styles.rowReverse]}>
+        <AppImage
+          path={isMe ? undefined : IMAGE_LOGO}
+          uri={isMe ? avatarUri : undefined}
+        />
+
+        <View style={styles.bubbleWrapper}>
+          {isMe && !isDeleted && (
+            <TouchableOpacity
+              style={styles.dotBtn}
+              onPress={() => setMenuVisibleId(isMenuOpen ? null : item.id)}
+              activeOpacity={0.6}>
+              <View style={styles.verticalDots}>
+                <View style={styles.dot} />
+                <View style={styles.dot} />
+                <View style={styles.dot} />
+              </View>
+            </TouchableOpacity>
+          )}
+
+          <View
+            style={[
+              styles.bubble,
+              isMe ? styles.myBubble : styles.otherBubble,
+            ]}>
+            {renderMedia()}
+
+            {isDeleted ? (
+              <Text style={[styles.text, styles.deletedTextStyle]}>
+                {isMe ? 'Your message is deleted' : 'This message is deleted'}
+              </Text>
+            ) : item.message ? (
+              <Text style={styles.text}>{item.message}</Text>
+            ) : null}
+
+            <View style={styles.bottomRow}>
+              <Text style={styles.time}>
+                {item.created_at
+                  ? new Date(item.created_at).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })
+                  : ''}
+              </Text>
+              {isMe && !isDeleted && <MessageStatusTick status={item.status} />}
+            </View>
+          </View>
+
+          {!isDeleted && (
+            <View
+              style={[styles.tail, isMe ? styles.tailRight : styles.tailLeft]}>
+              {isMe ? <ICON_SEND_RADIUS /> : <ICON_RECIEVER_RADIUS />}
+            </View>
+          )}
+
+          {isMe && isMenuOpen && !isDeleted && (
+            <View style={styles.popupMenu}>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => handleDeleteMessage(item.id)}>
+                <ICON_DELETE width={18} height={18} />
+                <Text style={[styles.menuText, styles.menuTextDelete]}>
+                  Delete
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const handleToggleRecording = async () => {
+    if (isRecording) {
+      await stopRecording();
+    } else {
+      await startRecording({
+        sampleRate: 44100,
+        channels: 1,
+        bitsPerSample: 16,
+        wavFile: 'my_recording.wav',
+      });
+    }
+  };
+
+  const handlePickMedia = () =>
+    pickMedia({mediaType: 'mixed', selectionLimit: 1});
+
+  // Pull to refresh: reset limit back to 20 and invalidate cache
+  const onRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    setLimit(20);
+    isInitialLoad.current = true;
+    isAdjustingScroll.current = false;
+    prevScrollHeight.current = 0;
+    setIsLoadingMore(false);
+    // Clear the RTK Query cache for this conversation so it fetches fresh
+    if (conversationId) {
+      store.dispatch(
+        supportChatSlice.util.invalidateTags([
+          {type: 'SupportChat', id: `Messages-${conversationId}`},
+        ]),
+      );
+    }
+  }, [conversationId]);
+
+  return (
+    <AppView customViewStyle={styles.screen}>
+      <ChatHeader
+        isLeftIcon={true}
+        title={
+          mode === 'admin'
+            ? userName ?? 'User Chat'
+            : TEXT.SUPPORT_CHAT ?? 'Support Chat'
+        }
+        status={isOtherUserOnline ? 'online' : undefined}
+        onlayout={() => {}}
+      />
+
+      <FlatList
+        ref={flatListRef}
+        data={messages}
+        keyExtractor={(item, i) => String(item.id ?? i)}
+        renderItem={renderMessage}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.listContent,
+          messages.length === 0 ? {justifyContent: 'center'} : undefined,
+        ]}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        onContentSizeChange={handleContentSizeChange}
+        refreshing={isRefreshing}
+        onRefresh={onRefresh}
+        ListHeaderComponent={
+          isLoadingMore ? (
+            <ActivityIndicator
+              style={styles.loader}
+              size="small"
+              color={COLORS.SECONDARY_COLOR}
+            />
+          ) : !hasMore && messages.length > 0 ? (
+            <View style={styles.noMoreContainer}>
+              <Text style={styles.noMoreText}>No more messages</Text>
+            </View>
+          ) : null
+        }
+        ListEmptyComponent={
+          !isApiFetching && !isRefreshing ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>No messages yet. Say hello!</Text>
+            </View>
+          ) : null
+        }
+      />
+
+      <ChatInput
+        showInputIcon={true}
+        onPress={handleSend}
+        showImage={true}
+        openGallery={handlePickMedia}
+        handleAudio={handleToggleRecording}
+        uploadedUrl={uploadedUrl}
+        uploadedType={uploadedType}
+        isUploading={isUploading}
+        isRecording={isRecording}
+        onRemoveMedia={handleRemoveMedia}
+      />
+      <Animated.View style={fakeView} />
+      <Modal
+        visible={!!mediaModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeMediaModal}
+        statusBarTranslucent>
+        <Pressable style={styles.modalOverlay} onPress={closeMediaModal}>
+          <Pressable
+            style={styles.modalContentContainer}
+            onPress={e => e.stopPropagation()}>
+            <Pressable style={styles.modalCloseBtn} onPress={closeMediaModal}>
+              <Text style={styles.modalCloseBtnText}>X</Text>
+            </Pressable>
+
+            {mediaModal?.type === 'image' && (
+              <Image
+                source={{uri: mediaModal.url}}
+                style={styles.modalImage}
+                resizeMode="contain"
+              />
+            )}
+
+            {mediaModal?.type === 'video' && (
+              <View style={styles.modalVideo}>
+                {isModalVideoLoading && (
+                  <ActivityIndicator
+                    size="large"
+                    color={COLORS.WHITE_COLOR}
+                    style={{position: 'absolute', zIndex: 10}}
+                  />
+                )}
+
+                <Video
+                  key={mediaModal.url}
+                  source={{uri: mediaModal.url}}
+                  style={{width: '100%', height: '100%'}}
+                  resizeMode="contain"
+                  controls={true}
+                  paused={false}
+                  onLoadStart={() => setIsModalVideoLoading(true)}
+                  onReadyForDisplay={() => setIsModalVideoLoading(false)}
+                  onError={() => setIsModalVideoLoading(false)}
+                  bufferConfig={{
+                    minBufferMs: 500,
+                    maxBufferMs: 1500,
+                    //@ts-ignore
+                    playBufferMs: 250,
+                    bufferForPlaybackMs: 250,
+                    bufferForPlaybackAfterRebufferMs: 500,
+                  }}
+                />
+              </View>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </AppView>
+  );
+};
+
+export default SupportChat;
+
 const styles = StyleSheet.create({
   screen: {paddingBottom: 0},
   listContent: {
     flexGrow: 1,
     backgroundColor: COLORS.APP_BACKGROUND,
     paddingVertical: SPACING.s,
-    justifyContent: 'flex-end',
   },
   row: {
     flexDirection: 'row',
@@ -133,6 +1023,8 @@ const styles = StyleSheet.create({
   empty: {flex: 1, justifyContent: 'center', alignItems: 'center'},
   emptyText: {color: COLORS.GRAY_TEXT_COLOR, fontSize: 15},
   loader: {paddingVertical: SPACING.m},
+  noMoreContainer: {paddingVertical: SPACING.s, alignItems: 'center'},
+  noMoreText: {color: COLORS.GRAY_TEXT_COLOR, fontSize: scaleSize(12)},
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -265,7 +1157,6 @@ const styles = StyleSheet.create({
     marginRight: 24,
   },
 
-  // ✅ IMPROVED MODAL UI STYLES
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.95)',
@@ -291,7 +1182,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
     borderRadius: SPACING.s,
     overflow: 'hidden',
-    // These two center the loader perfectly
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -353,759 +1243,3 @@ const styles = StyleSheet.create({
     zIndex: 999,
   },
 });
-
-// --- Component ---
-const SupportChat = () => {
-  const route = useRoute<RouteProps>();
-  const {selectedMedia, pickMedia, reset: resetGallery} = useGalleryPicker();
-  const [deleteSupportMessage] = useDeleteMessageMutation();
-  const [markMessagesAsRead] = useMarkMessagesAsReadMutation();
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const {
-    audioPath,
-    isRecording,
-    recordingDuration,
-    startRecording,
-    stopRecording,
-    reset: resetAudio,
-  } = useAudioRecorder();
-
-  const {mode = 'user', conversationId, userName} = route.params ?? {};
-  const {TEXT} = useText();
-  const {bottom} = useSafeAreaInsets();
-  const profile = useAppSelector(state => state.app?.userInfo);
-  const flatListRef = useRef<FlatList>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-
-  const messagesRef = useRef<Message[]>([]);
-  const processedSocketIdsRef = useRef<Set<number>>(new Set());
-
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const processedPage = useRef(0);
-  const hasMarkedAsRead = useRef(false);
-
-  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
-  const [uploadedType, setUploadedType] = useState<
-    'image' | 'video' | 'audio' | null
-  >(null);
-  const [uploadedDuration, setUploadedDuration] = useState<number | null>(null);
-
-  const [playingAudioId, setPlayingAudioId] = useState<number | string | null>(
-    null,
-  );
-  const [mediaModal, setMediaModal] = useState<{
-    url: string;
-    type: 'image' | 'video';
-  } | null>(null);
-  const [isModalVideoLoading, setIsModalVideoLoading] = useState(false);
-  const audioPlayerRef = useRef<VideoRef>(null);
-
-  const {height} = useKeyboardAnimation();
-  const isTabScreen = useIsTabScreen();
-  const tabBarHeight = isTabScreen ? scaleSize(70) : 0;
-  const fakeView = useAnimatedStyle(
-    () => ({
-      height: Math.abs(height.value) - (tabBarHeight + bottom),
-      marginBottom: isTabScreen ? 0 : bottom,
-    }),
-    [bottom, tabBarHeight],
-  );
-
-  const {messages: socketMessages, presenceMap} = useSupportChatSocket(
-    conversationId ?? null,
-  );
-
-  const [sendMessage] = useSendSupportMessageMutation();
-  const [uploadFile, {isLoading: isUploading}] =
-    useUploadSupportChatFileMutation();
-  const {
-    data: messagesData,
-    isFetching,
-    refetch,
-  } = useGetSupportChatMessagesQuery(
-    {conversationId: conversationId ?? '', page, limit: 20},
-    {skip: !conversationId},
-  );
-
-  const participants = messagesData?.data?.participants ?? [];
-  const senderType = mode === 'admin' ? 'admin' : 'user';
-  const otherParticipant = participants.find(p => p.role !== senderType);
-
-  const isOtherUserOnline = otherParticipant?.id
-    ? presenceMap[otherParticipant.id] === 'online'
-    : false;
-
-  const [menuVisibleId, setMenuVisibleId] = useState<number | null>(null);
-  const [deletedIds, setDeletedIds] = useState<Set<number>>(new Set());
-
-  useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
-
-  const handleMarkAsRead = useCallback(
-    async (messageIds: number[]) => {
-      if (!conversationId || messageIds.length === 0) return;
-      setMessages(prev =>
-        prev.map(msg =>
-          messageIds.includes(msg.id) && msg.sender_type !== senderType
-            ? {...msg, status: 'read' as const}
-            : msg,
-        ),
-      );
-
-      try {
-        await markMessagesAsRead({
-          conversationId: conversationId,
-          message_ids: messageIds,
-        }).unwrap();
-      } catch (error) {
-        console.log('Mark as read error:', error);
-        setMessages(prev =>
-          prev.map(msg =>
-            messageIds.includes(msg.id) && msg.sender_type !== senderType
-              ? {...msg, status: 'delivered' as const}
-              : msg,
-          ),
-        );
-      }
-    },
-    [conversationId, markMessagesAsRead, senderType],
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      if (conversationId) {
-        const timer = setTimeout(() => {
-          const currentMessages = messagesRef.current;
-          const unreadIds = currentMessages
-            .filter(m => m.sender_type !== senderType && m.status !== 'read')
-            .map(m => m.id);
-          if (unreadIds.length > 0) {
-            handleMarkAsRead(unreadIds);
-          }
-        }, 500);
-        return () => clearTimeout(timer);
-      }
-      return () => {};
-    }, [conversationId, handleMarkAsRead, senderType]),
-  );
-
-  useEffect(() => {
-    if (
-      messagesData?.data?.messages &&
-      !hasMarkedAsRead.current &&
-      conversationId
-    ) {
-      const unreadIds = messagesData.data.messages
-        .filter(m => m.sender_type !== senderType && m.status !== 'read')
-        .map(m => m.id);
-
-      if (unreadIds.length > 0) {
-        handleMarkAsRead(unreadIds);
-      }
-      hasMarkedAsRead.current = true;
-    }
-  }, [messagesData, conversationId, senderType, handleMarkAsRead]);
-
-  useEffect(() => {
-    hasMarkedAsRead.current = false;
-    processedSocketIdsRef.current = new Set();
-  }, [conversationId]);
-
-  const handleDeleteMessage = async (messageId: number) => {
-    setMenuVisibleId(null);
-    try {
-      await deleteSupportMessage({
-        messageId,
-        conversationId: Number(conversationId),
-      }).unwrap();
-      setDeletedIds(new Set());
-      setMessages([]);
-      setPage(1);
-      processedPage.current = 0;
-      refetch();
-      Toast.show({
-        type: 'success',
-        text1: TEXT.MESSAGE_DELETED,
-      });
-    } catch (error: any) {}
-  };
-
-  const handleUploadFile = useCallback(
-    async (uri: string, type: string, name: string): Promise<string | null> => {
-      if (!uri) return null;
-      const formData = new FormData();
-      formData.append('file', {
-        uri,
-        type,
-        name: name || 'media',
-      } as unknown as Blob);
-      try {
-        const response = await uploadFile(formData).unwrap();
-        setUploadedUrl(response.url);
-        return response.url;
-      } catch (error) {
-        Toast.show({type: 'error', text1: 'Failed to upload file'});
-        setUploadedType(null);
-        setUploadedDuration(null);
-        return null;
-      }
-    },
-    [uploadFile],
-  );
-
-  const handleRemoveMedia = useCallback(() => {
-    setUploadedUrl(null);
-    setUploadedType(null);
-    setUploadedDuration(null);
-  }, []);
-
-  useEffect(() => {
-    if (!selectedMedia) return;
-    const media = Array.isArray(selectedMedia)
-      ? selectedMedia[0]
-      : selectedMedia;
-    if (!media?.uri) return;
-    const mimeType = media.type ?? 'image/jpeg';
-    const fileName =
-      media.fileName ?? `media.${mimeType.split('/')[1] ?? 'jpg'}`;
-    setUploadedType(mimeType.startsWith('video/') ? 'video' : 'image');
-    setUploadedDuration(
-      media.duration ? Math.round(media.duration / 1000) : null,
-    );
-    handleUploadFile(media.uri, mimeType, fileName);
-    resetGallery();
-  }, [selectedMedia, handleUploadFile, resetGallery]);
-
-  useEffect(() => {
-    if (!audioPath) return;
-    setUploadedType('audio');
-    setUploadedDuration(recordingDuration);
-    const formattedUri = audioPath.startsWith('file://')
-      ? audioPath
-      : `file://${audioPath}`;
-    handleUploadFile(formattedUri, 'audio/wav', 'recording.wav');
-    resetAudio();
-  }, [audioPath, handleUploadFile, resetAudio, recordingDuration]);
-
-  useEffect(() => {
-    if (isRefreshing && !isFetching) {
-      setIsRefreshing(false);
-    }
-  }, [isFetching, isRefreshing]);
-
-  useEffect(() => {
-    if (!messagesData?.data?.messages || processedPage.current === page) return;
-    processedPage.current = page;
-    const newMsgs = messagesData.data.messages;
-    setMessages(prev => {
-      const existingIds = new Set(prev.map(m => m.id));
-      const uniqueMsgs = newMsgs.filter(m => !existingIds.has(m.id));
-      if (!uniqueMsgs.length) return prev;
-      return [...uniqueMsgs, ...prev].sort(
-        (a, b) =>
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-      );
-    });
-    if (!messagesData.data.pagination?.has_next_page) setHasMore(false);
-  }, [messagesData, page]);
-
-  useEffect(() => {
-    if (!socketMessages || socketMessages.length === 0) return;
-
-    const incomingSocketMsgs = socketMessages as Message[];
-    const newMsgsFromOthers: Message[] = [];
-
-    incomingSocketMsgs.forEach(socketMsg => {
-      if (
-        socketMsg.sender_type !== senderType &&
-        !processedSocketIdsRef.current.has(socketMsg.id)
-      ) {
-        newMsgsFromOthers.push(socketMsg);
-      }
-    });
-
-    setMessages(prev => {
-      const prevIds = new Set(prev.map(m => m.id));
-      let updated = [...prev];
-
-      incomingSocketMsgs.forEach(socketMsg => {
-        if (prevIds.has(socketMsg.id)) {
-          updated = updated.map(m =>
-            m.id === socketMsg.id ? {...m, status: socketMsg.status} : m,
-          );
-        } else if (socketMsg.sender_type !== senderType) {
-          updated.push(socketMsg);
-          processedSocketIdsRef.current.add(socketMsg.id);
-        }
-      });
-
-      return updated.sort(
-        (a, b) =>
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-      );
-    });
-
-    if (newMsgsFromOthers.length > 0) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({animated: true}), 100);
-
-      if (conversationId) {
-        handleMarkAsRead(newMsgsFromOthers.map(m => m.id));
-      }
-
-      newMsgsFromOthers.forEach(newMessage => {
-        try {
-          store.dispatch(
-            supportChatSlice.util.updateQueryData(
-              'getAdminConversations',
-              {page: 1, limit: 20},
-              (draft: any) => {
-                if (!draft.data) return;
-                const index = draft.data.findIndex(
-                  (c: any) => c.conversation_id === newMessage.conversation_id,
-                );
-                if (index !== -1) {
-                  draft.data[index].unread_count = 0;
-                  draft.data[index].last_message = {
-                    message: newMessage.message,
-                    message_type: newMessage.message_type,
-                    sender_type: newMessage.sender_type,
-                    created_at: newMessage.created_at,
-                  };
-                  const [updatedItem] = draft.data.splice(index, 1);
-                  draft.data.unshift(updatedItem);
-                }
-              },
-            ),
-          );
-        } catch (e) {}
-      });
-    }
-  }, [socketMessages, senderType, conversationId, handleMarkAsRead]);
-
-  const scrollToBottom = () => {
-    setTimeout(() => flatListRef.current?.scrollToEnd({animated: true}), 150);
-  };
-
-  const handleSend = async (text: string) => {
-    const trimmedText = text.trim();
-    if (!trimmedText && !uploadedUrl) return;
-    if (!conversationId) return;
-    const tempId = Date.now();
-    const isMedia = !!uploadedUrl && !!uploadedType;
-    const messageType = isMedia ? uploadedType : 'text';
-    const tempMessage: Message = {
-      id: tempId,
-      conversation_id: Number(conversationId),
-      sender_id: 0,
-      receiver_id: 0,
-      sender_type: senderType,
-      message_type: messageType as Message['message_type'],
-      message: trimmedText,
-      media_url: isMedia ? uploadedUrl : null,
-      thumbnail: null,
-      duration: uploadedDuration,
-      status: 'sent',
-      created_at: new Date().toISOString(),
-    };
-    setMessages(prev => [...prev, tempMessage]);
-    scrollToBottom();
-    const payload: any = {
-      conversation_id: conversationId,
-      message_type: messageType,
-    };
-    if (isMedia) {
-      payload.media_url = uploadedUrl;
-      payload.duration = uploadedDuration;
-    } else {
-      payload.message = trimmedText;
-    }
-
-    try {
-      const result: any = await sendMessage(payload).unwrap();
-      if (result?.data) {
-        setMessages(prev => prev.map(m => (m.id === tempId ? result.data : m)));
-      }
-      if (isMedia) handleRemoveMedia();
-    } catch (error) {
-      console.log(error);
-      setMessages(prev => prev.filter(m => m.id !== tempId));
-    }
-  };
-
-  const formatDuration = (seconds: number | null | undefined): string => {
-    if (!seconds) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const handlePlayAudio = (id: number | string, url: string) => {
-    setPlayingAudioId(id);
-  };
-
-  const openMediaModal = (url: string, type: 'image' | 'video') => {
-    if (type === 'video') setIsModalVideoLoading(true);
-    setMediaModal({url, type});
-  };
-  const closeMediaModal = () => {
-    setMediaModal(null);
-    setIsModalVideoLoading(false);
-  };
-
-  const renderMessage = ({item}: {item: Message}) => {
-    const isMe = item.sender_type === senderType;
-    const isDeleted = deletedIds.has(item.id);
-    const isMenuOpen = menuVisibleId === item.id;
-
-    const avatarUri = isMe
-      ? profile?.image
-      : participants.find(p => p.id === item.sender_id)?.profile_image;
-
-    const renderMedia = () => {
-      if (isDeleted) return null;
-
-      if (item.message_type === 'image' && item.media_url) {
-        return (
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => openMediaModal(item.media_url!, 'image')}
-            style={styles.mediaContainer}>
-            <Image
-              source={{uri: item.media_url}}
-              style={styles.mediaImage}
-              resizeMode="cover"
-            />
-          </TouchableOpacity>
-        );
-      }
-
-      if (item.message_type === 'video' && item?.media_url) {
-        return (
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => openMediaModal(item.media_url!, 'video')}
-            style={styles.mediaContainer}>
-            <View style={styles.videoContainer}>
-              <Video
-                source={{uri: item.media_url}}
-                style={styles.mediaImage}
-                resizeMode="cover"
-                paused={true}
-                repeat={false}
-                muted={true}
-              />
-              <View style={styles.playIconWrapper}>
-                <View style={styles.playIcon} />
-              </View>
-              {item.duration ? (
-                <View style={styles.durationBadge}>
-                  <Text style={styles.durationText}>
-                    {formatDuration(item.duration)}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          </TouchableOpacity>
-        );
-      }
-
-      if (item.message_type === 'audio' && item?.media_url) {
-        const isPlaying = playingAudioId === item.id;
-        return (
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => handlePlayAudio(item?.id, item.media_url!)}
-            style={styles.audioContainer}>
-            <View
-              style={[
-                styles.audioPlayBtn,
-                isPlaying && {backgroundColor: COLORS.GRAY_TEXT_COLOR},
-              ]}>
-              {isPlaying ? (
-                <View style={{flexDirection: 'row', gap: 2.5}}>
-                  <View style={styles.pauseBar} />
-                  <View style={styles.pauseBar} />
-                </View>
-              ) : (
-                <View style={styles.playSmallIcon} />
-              )}
-            </View>
-            <View style={styles.audioWaveContainer}>
-              <View style={styles.waveform}>
-                {WAVEFORM_HEIGHTS.map((h, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.waveBar,
-                      {
-                        height: h,
-                        backgroundColor: isPlaying
-                          ? COLORS.SECONDARY_COLOR
-                          : COLORS.GRAY_TEXT_COLOR,
-                      },
-                    ]}
-                  />
-                ))}
-              </View>
-              <Text style={styles.audioDurationText}>
-                {formatDuration(item.duration)}
-              </Text>
-            </View>
-
-            {isPlaying && (
-              <Video
-                ref={audioPlayerRef}
-                source={{
-                  uri: item?.media_url,
-                }}
-                paused={false}
-                muted={false}
-                volume={1}
-                repeat={false}
-                ignoreSilentSwitch="ignore"
-                playWhenInactive={true}
-                playInBackground={false}
-                progressUpdateInterval={100}
-                onEnd={() => {
-                  setPlayingAudioId(null);
-                }}
-                onError={error => {
-                  setPlayingAudioId(null);
-                }}
-                style={{
-                  position: 'absolute',
-                  width: 1,
-                  height: 1,
-                  opacity: 0.01,
-                }}
-              />
-            )}
-          </TouchableOpacity>
-        );
-      }
-      return null;
-    };
-
-    return (
-      <View style={[styles.row, isMe && styles.rowReverse]}>
-        <AppImage
-          path={isMe ? undefined : IMAGE_LOGO}
-          uri={isMe ? avatarUri : undefined}
-        />
-
-        <View style={styles.bubbleWrapper}>
-          {isMe && !isDeleted && (
-            <TouchableOpacity
-              style={styles.dotBtn}
-              onPress={() => setMenuVisibleId(isMenuOpen ? null : item.id)}
-              activeOpacity={0.6}>
-              <View style={styles.verticalDots}>
-                <View style={styles.dot} />
-                <View style={styles.dot} />
-                <View style={styles.dot} />
-              </View>
-            </TouchableOpacity>
-          )}
-
-          <View
-            style={[
-              styles.bubble,
-              isMe ? styles.myBubble : styles.otherBubble,
-            ]}>
-            {renderMedia()}
-
-            {isDeleted ? (
-              <Text style={[styles.text, styles.deletedTextStyle]}>
-                {isMe ? 'Your message is deleted' : 'This message is deleted'}
-              </Text>
-            ) : item.message ? (
-              <Text style={styles.text}>{item.message}</Text>
-            ) : null}
-
-            <View style={styles.bottomRow}>
-              <Text style={styles.time}>
-                {item.created_at
-                  ? new Date(item.created_at).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })
-                  : ''}
-              </Text>
-              {isMe && !isDeleted && <MessageStatusTick status={item.status} />}
-            </View>
-          </View>
-
-          {!isDeleted && (
-            <View
-              style={[styles.tail, isMe ? styles.tailRight : styles.tailLeft]}>
-              {isMe ? <ICON_SEND_RADIUS /> : <ICON_RECIEVER_RADIUS />}
-            </View>
-          )}
-
-          {isMe && isMenuOpen && !isDeleted && (
-            <View style={styles.popupMenu}>
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => handleDeleteMessage(item.id)}>
-                <ICON_DELETE width={18} height={18} />
-                <Text style={[styles.menuText, styles.menuTextDelete]}>
-                  Delete
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      </View>
-    );
-  };
-
-  const handleToggleRecording = async () => {
-    if (isRecording) {
-      await stopRecording();
-    } else {
-      await startRecording({
-        sampleRate: 44100,
-        channels: 1,
-        bitsPerSample: 16,
-        wavFile: 'my_recording.wav',
-      });
-    }
-  };
-
-  const handlePickMedia = () =>
-    pickMedia({mediaType: 'mixed', selectionLimit: 1});
-
-  const onRefresh = useCallback(() => {
-    setIsRefreshing(true);
-    setMessages([]);
-    setHasMore(true);
-    processedPage.current = 0;
-    hasMarkedAsRead.current = false;
-    if (page === 1) {
-      refetch();
-    } else {
-      setPage(1);
-    }
-  }, [page, refetch]);
-
-  return (
-    <AppView customViewStyle={styles.screen}>
-      <ChatHeader
-        isLeftIcon={true}
-        title={
-          mode === 'admin'
-            ? userName ?? 'User Chat'
-            : TEXT.SUPPORT_CHAT ?? 'Support Chat'
-        }
-        status={isOtherUserOnline ? 'online' : undefined}
-        onlayout={() => {}}
-      />
-
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        keyExtractor={(item, i) => String(item.id ?? i)}
-        renderItem={renderMessage}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-        onEndReached={() =>
-          hasMore && !isFetching && !isRefreshing && setPage(p => p + 1)
-        }
-        onEndReachedThreshold={0.3}
-        onContentSizeChange={() => messages.length > 0 && scrollToBottom()}
-        refreshing={isRefreshing}
-        onRefresh={onRefresh}
-        ListHeaderComponent={
-          isFetching && page > 1 ? (
-            <ActivityIndicator
-              style={styles.loader}
-              size="small"
-              color={COLORS.SECONDARY_COLOR}
-            />
-          ) : null
-        }
-        ListEmptyComponent={
-          !isFetching && !isRefreshing ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyText}>No messages yet. Say hello!</Text>
-            </View>
-          ) : null
-        }
-      />
-
-      <ChatInput
-        showInputIcon={true}
-        onPress={handleSend}
-        showImage={true}
-        openGallery={handlePickMedia}
-        handleAudio={handleToggleRecording}
-        uploadedUrl={uploadedUrl}
-        uploadedType={uploadedType}
-        isUploading={isUploading}
-        isRecording={isRecording}
-        onRemoveMedia={handleRemoveMedia}
-      />
-      <Animated.View style={fakeView} />
-      <Modal
-        visible={!!mediaModal}
-        transparent
-        animationType="fade"
-        onRequestClose={closeMediaModal}
-        statusBarTranslucent>
-        <Pressable style={styles.modalOverlay} onPress={closeMediaModal}>
-          <Pressable
-            style={styles.modalContentContainer}
-            onPress={e => e.stopPropagation()}>
-            <Pressable style={styles.modalCloseBtn} onPress={closeMediaModal}>
-              <Text style={styles.modalCloseBtnText}>X</Text>
-            </Pressable>
-
-            {mediaModal?.type === 'image' && (
-              <Image
-                source={{uri: mediaModal.url}}
-                style={styles.modalImage}
-                resizeMode="contain"
-              />
-            )}
-
-            {mediaModal?.type === 'video' && (
-              <View style={styles.modalVideo}>
-                {isModalVideoLoading && (
-                  <ActivityIndicator
-                    size="large"
-                    color={COLORS.WHITE_COLOR}
-                    style={{position: 'absolute', zIndex: 10}}
-                  />
-                )}
-
-                <Video
-                  key={mediaModal.url}
-                  source={{uri: mediaModal.url}}
-                  style={{width: '100%', height: '100%'}}
-                  resizeMode="contain"
-                  controls={true}
-                  paused={false}
-                  onLoadStart={() => setIsModalVideoLoading(true)}
-                  onReadyForDisplay={() => setIsModalVideoLoading(false)}
-                  onError={() => setIsModalVideoLoading(false)}
-                  bufferConfig={{
-                    minBufferMs: 500,
-                    maxBufferMs: 1500,
-                    //@ts-ignore
-                    playBufferMs: 250,
-                    bufferForPlaybackMs: 250,
-                    bufferForPlaybackAfterRebufferMs: 500,
-                  }}
-                />
-              </View>
-            )}
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </AppView>
-  );
-};
-
-export default SupportChat;

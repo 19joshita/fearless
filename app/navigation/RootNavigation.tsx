@@ -16,6 +16,7 @@ import {getCountry, getLocales} from 'react-native-localize';
 import useNotifications, {
   getPendingNotification,
   clearPendingNotification,
+  handleNotification, // ⚠️ FIX 4: Import the handler
 } from '../hooks/useNotifications';
 import {useRegisterDeviceTokenMutation} from '@redux/support-chat-slice';
 import {navigate, navigationRef} from '@navigation-utils';
@@ -26,8 +27,10 @@ const RootNavigation = () => {
   const {refetch: langRefetch} = useGetLanguagesQuery(null);
   const stored = getPrefsValue(STORAGE.CURRENT_LANGUAGE) as 'en' | 'de';
   const [registerDeviceToken] = useRegisterDeviceTokenMutation();
+
   useNotifications();
-  // LANGUAGE & INTERNET LOGIC (Unchanged)
+
+  // LANGUAGE & INTERNET LOGIC
   useEffect(() => {
     try {
       if (!stored) {
@@ -64,23 +67,39 @@ const RootNavigation = () => {
   }, []);
 
   // ==========================================
-  //  API INTEGRATION (Reads token saved by the Alert popup)
+  // ⚠️ FIX 5: HANDLE KILLED STATE NOTIFICATION
+  // ==========================================
+  useEffect(() => {
+    if (!isLogin) return;
+
+    // When user logs in, check if the app was opened via a notification while killed
+    const pendingData = getPendingNotification();
+    if (pendingData) {
+      clearPendingNotification(); // Clear immediately to prevent loops
+      handleNotification(pendingData); // Trigger navigation
+    }
+  }, [isLogin]);
+
+  // ==========================================
+  // API INTEGRATION (Cleaned up duplicate)
   // ==========================================
   useEffect(() => {
     if (!isLogin) return;
 
     const handleTokenRegistration = async () => {
       try {
-        const fcmToken = getPrefsValue(STORAGE.FCM_TOKEN);
-        console.log('FCM Token for API:', fcmToken);
+        let fcmToken = getPrefsValue(STORAGE.FCM_TOKEN);
+        if (fcmToken) {
+          fcmToken = fcmToken.trim(); // Clean whitespace
+        }
 
+        console.log('Cleaned FCM Token for API:', fcmToken);
         if (!fcmToken) return;
 
         const registeredToken = getPrefsValue(STORAGE.REGISTERED_FCM_TOKEN);
 
         if (registeredToken !== fcmToken) {
           console.log('Calling Register Device Token API...');
-
           const response = await registerDeviceToken({
             device_token: fcmToken,
             device_type: Platform.OS as 'android' | 'ios',
@@ -98,48 +117,6 @@ const RootNavigation = () => {
 
     handleTokenRegistration();
   }, [isLogin, registerDeviceToken]);
-
-  // ==========================================
-  // PENDING NOTIFICATION LOGIC
-  // ==========================================
-  useEffect(() => {
-    if (isLogin) {
-      const timer = setTimeout(() => {
-        const pendingData = getPendingNotification();
-
-        if (pendingData) {
-          console.log('Dashboard is mounted! Processing notification...');
-          clearPendingNotification();
-
-          const token = getPrefsValue(STORAGE.TOKEN);
-          if (!token) return;
-
-          if (
-            pendingData?.type === 'support_chat' &&
-            pendingData?.conversationId
-          ) {
-            const userData = getPrefsValue(STORAGE.USER_DATA);
-            let userInfo = null;
-            try {
-              userInfo = userData ? JSON.parse(userData) : null;
-            } catch (e) {}
-
-            if (userInfo?.role === 'admin') {
-              navigate(RouteNames.USER_LIST);
-            } else {
-              navigate(RouteNames.SUPPORT_CHAT, {
-                mode: 'user',
-                conversationId: pendingData.conversationId,
-                userName: userInfo?.name,
-              });
-            }
-          }
-        }
-      }, 600);
-
-      return () => clearTimeout(timer);
-    }
-  }, [isLogin]);
 
   return (
     <NavigationContainer ref={navigationRef}>
