@@ -34,7 +34,8 @@ if linkage
   Pod::UI.puts "Configuring Pods with #{linkage}ally linked Frameworks".green
   use_frameworks! :linkage => linkage.to_sym
 end
-
+use_frameworks! :linkage => :static
+$RNFirebaseAsStaticFramework = true
 target 'FearlessCode' do
   config = use_native_modules!
 pod 'GoogleUtilities', :modular_headers => true

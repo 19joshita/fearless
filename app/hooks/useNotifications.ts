@@ -30,7 +30,6 @@ const useNotifications = () => {
       await createChannel();
 
       const hasPermission = await requestPermission();
-
       if (hasPermission) {
         const token = await getFCMToken();
         if (token) {

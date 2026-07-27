@@ -3,13 +3,13 @@ import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
 import FirebaseCore
+
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
   var window: UIWindow?
-
   var reactNativeDelegate: ReactNativeDelegate?
   var reactNativeFactory: RCTReactNativeFactory?
-
+  
   func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
@@ -32,23 +32,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     
     return true
   }
-  
   func applicationDidEnterBackground(_ application: UIApplication) {
     if UIDevice.current.isMultitaskingSupported {
             let application = UIApplication.shared
             var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
             backgroundTask = application.beginBackgroundTask {
-                // Expiration handler — called when time is about to expire
                 application.endBackgroundTask(backgroundTask)
                 backgroundTask = .invalid
             }
 
             DispatchQueue.global(qos: .default).async {
-                // Perform your background task here
                 print("\n\nRunning in the background!\n\n")
-
-                // End the background task when done
                 application.endBackgroundTask(backgroundTask)
                 backgroundTask = .invalid
             }

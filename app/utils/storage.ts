@@ -9,6 +9,7 @@ export const getPrefsValue = (key: string) => {
     }
   } catch (error) {
     console.error('PREFS ERROR', error);
+    return undefined;
   }
 };
 

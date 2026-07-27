@@ -31,6 +31,7 @@ const ProfileView: FC = () => {
     dispatch(setIsLogin(false));
     setPrefsValue(STORAGE.TOKEN, '');
     setPrefsValue(STORAGE.USER_ID, '');
+    setPrefsValue(STORAGE.FCM_TOKEN, '');
   };
 
   return (

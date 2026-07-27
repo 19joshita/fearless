@@ -1,8 +1,15 @@
-import React, {useEffect} from 'react';
+import React, {useEffect, useState} from 'react'; // <-- ADDED useState
 import {NavigationContainer} from '@react-navigation/native';
 import DashboardStack from './stacks/DashboardStack';
 import {getPrefsValue, setPrefsValue, RouteNames} from '@utils';
-import {Platform} from 'react-native';
+import {
+  Platform,
+  View,
+  Text,
+  TouchableOpacity,
+  Clipboard,
+  StyleSheet,
+} from 'react-native'; // <-- ADDED UI imports
 import Toast from 'react-native-toast-message';
 import AuthStack from './stacks/AuthStack';
 import {STORAGE, TOAST_CONFIG} from '@constants';
@@ -16,10 +23,10 @@ import {getCountry, getLocales} from 'react-native-localize';
 import useNotifications, {
   getPendingNotification,
   clearPendingNotification,
-  handleNotification, // ⚠️ FIX 4: Import the handler
+  handleNotification,
 } from '../hooks/useNotifications';
 import {useRegisterDeviceTokenMutation} from '@redux/support-chat-slice';
-import {navigate, navigationRef} from '@navigation-utils';
+import {navigationRef} from '@navigation-utils';
 
 const RootNavigation = () => {
   const isLogin = useAppSelector(state => state.app.isLogin);
@@ -28,7 +35,14 @@ const RootNavigation = () => {
   const stored = getPrefsValue(STORAGE.CURRENT_LANGUAGE) as 'en' | 'de';
   const [registerDeviceToken] = useRegisterDeviceTokenMutation();
 
-  useNotifications();
+  const [visibleToken, setVisibleToken] = useState<any>(null);
+
+  // <-- CHANGED: Pass callback to hook to get token instantly
+  //@ts-ignore
+  useNotifications(token => {
+    console.log('Token received in RootNavigation:', token);
+    setVisibleToken(token);
+  });
 
   // LANGUAGE & INTERNET LOGIC
   useEffect(() => {
@@ -66,46 +80,40 @@ const RootNavigation = () => {
     };
   }, []);
 
-  // ==========================================
-  // ⚠️ FIX 5: HANDLE KILLED STATE NOTIFICATION
-  // ==========================================
+  // HANDLE KILLED STATE NOTIFICATION
   useEffect(() => {
     if (!isLogin) return;
 
-    // When user logs in, check if the app was opened via a notification while killed
     const pendingData = getPendingNotification();
     if (pendingData) {
-      clearPendingNotification(); // Clear immediately to prevent loops
-      handleNotification(pendingData); // Trigger navigation
+      clearPendingNotification();
+      handleNotification(pendingData);
     }
   }, [isLogin]);
 
-  // ==========================================
-  // API INTEGRATION (Cleaned up duplicate)
-  // ==========================================
+  // API INTEGRATION
   useEffect(() => {
     if (!isLogin) return;
 
     const handleTokenRegistration = async () => {
       try {
         let fcmToken = getPrefsValue(STORAGE.FCM_TOKEN);
-        if (fcmToken) {
-          fcmToken = fcmToken.trim(); // Clean whitespace
-        }
 
-        console.log('Cleaned FCM Token for API:', fcmToken);
+        if (fcmToken) {
+          fcmToken = fcmToken.trim();
+        }
+        setVisibleToken(fcmToken);
+
         if (!fcmToken) return;
 
         const registeredToken = getPrefsValue(STORAGE.REGISTERED_FCM_TOKEN);
 
         if (registeredToken !== fcmToken) {
-          console.log('Calling Register Device Token API...');
           const response = await registerDeviceToken({
             device_token: fcmToken,
             device_type: Platform.OS as 'android' | 'ios',
           }).unwrap();
 
-          console.log('API SUCCESS RESPONSE:', JSON.stringify(response));
           await setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, fcmToken);
         } else {
           console.log('Token already registered, skipping API.');
@@ -118,12 +126,57 @@ const RootNavigation = () => {
     handleTokenRegistration();
   }, [isLogin, registerDeviceToken]);
 
+  // <-- ADDED: Copy function
+  const copyTokenToClipboard = () => {
+    if (visibleToken) {
+      Clipboard.setString(visibleToken);
+      Toast.show({
+        type: 'success',
+        text1: 'Token Copied to Clipboard!',
+        position: 'top',
+      });
+    }
+  };
+
   return (
-    <NavigationContainer ref={navigationRef}>
-      {!isLogin ? <AuthStack /> : <DashboardStack />}
-      <Toast config={TOAST_CONFIG} swipeable={false} autoHide={true} />
-    </NavigationContainer>
+    // <-- WRAPPED IN VIEW
+    <View style={styles.flexContainer}>
+      <NavigationContainer ref={navigationRef}>
+        {!isLogin ? <AuthStack /> : <DashboardStack />}
+      </NavigationContainer>
+    </View>
   );
 };
+
+// <-- ADDED: Styles
+const styles = StyleSheet.create({
+  flexContainer: {
+    flex: 1,
+  },
+  tokenBox: {
+    position: 'absolute',
+    top: 60,
+    left: 10,
+    right: 10,
+    backgroundColor: 'rgba(0, 40, 0, 0.95)',
+    padding: 15,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#00FF00',
+    zIndex: 9999,
+    elevation: 9999,
+  },
+  tokenLabel: {
+    color: '#00FF00',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  tokenText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontFamily: 'monospace',
+  },
+});
 
 export default RootNavigation;
