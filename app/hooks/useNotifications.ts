@@ -11,14 +11,12 @@ import {STORAGE} from '@constants';
 type NotificationData = Record<string, string>;
 const CHANNEL_ID = 'default';
 
-// PENDING NOTIFICATION STATE (FOR KILLED APP)
 let pendingNotificationData: any = null;
 export const getPendingNotification = () => pendingNotificationData;
 export const clearPendingNotification = () => {
   pendingNotificationData = null;
 };
 
-// MAIN HOOK
 const useNotifications = () => {
   useEffect(() => {
     let unsubscribeForeground: (() => void) | undefined;
@@ -28,23 +26,19 @@ const useNotifications = () => {
 
     const setup = async () => {
       await createChannel();
-
       const hasPermission = await requestPermission();
       if (hasPermission) {
         const token = await getFCMToken();
         if (token) {
-          await setPrefsValue(STORAGE.FCM_TOKEN, token);
+          setPrefsValue(STORAGE.FCM_TOKEN, token);
         }
       }
-
-      //  FIX 1: Added 'await' to prevent race conditions with RootNavigation
       await checkInitialNotification();
 
       unsubscribeForeground = messaging().onMessage(onForegroundMessage);
 
       unsubscribeBackground = messaging().onNotificationOpenedApp(
         remoteMessage => {
-          console.log('Opened from background', remoteMessage);
           handleNotification(remoteMessage.data);
         },
       );
@@ -58,14 +52,12 @@ const useNotifications = () => {
       });
 
       unsubscribeToken = messaging().onTokenRefresh(async token => {
-        console.log('New FCM Token:', token);
-        await setPrefsValue(STORAGE.FCM_TOKEN, token);
-        await setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, '');
+        setPrefsValue(STORAGE.FCM_TOKEN, token);
+        setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, '');
       });
     };
 
     setup();
-
     return () => {
       unsubscribeForeground?.();
       unsubscribeBackground?.();
@@ -77,7 +69,6 @@ const useNotifications = () => {
 
 export default useNotifications;
 
-// SETUP FUNCTIONS
 async function createChannel() {
   if (Platform.OS !== 'android') return;
   await notifee.createChannel({
@@ -88,29 +79,21 @@ async function createChannel() {
 }
 
 async function requestPermission() {
-  if (Platform.OS === 'android') {
-    await notifee.requestPermission();
-  }
+  if (Platform.OS === 'android') await notifee.requestPermission();
   const status = await messaging().requestPermission();
-  const enabled =
+  return (
     status === messaging.AuthorizationStatus.AUTHORIZED ||
-    status === messaging.AuthorizationStatus.PROVISIONAL;
-
-  console.log('Notification Permission:', enabled);
-  return enabled;
+    status === messaging.AuthorizationStatus.PROVISIONAL
+  );
 }
 
 async function getFCMToken() {
-  const token = await messaging().getToken();
-  console.log('FCM Token:', token);
-  return token;
+  return await messaging().getToken();
 }
 
-// NOTIFICATION HANDLERS
 async function checkInitialNotification() {
   const remoteMessage = await messaging().getInitialNotification();
   if (remoteMessage) {
-    console.log('App opened from KILLED state. Saving notification data...');
     pendingNotificationData = remoteMessage.data;
   }
 }
@@ -118,41 +101,46 @@ async function checkInitialNotification() {
 async function onForegroundMessage(
   remoteMessage: FirebaseMessagingTypes.RemoteMessage,
 ) {
-  console.log('Foreground Message:', remoteMessage);
+  const currentUserId = getPrefsValue(STORAGE.USER_ID);
+  const notificationUserId = remoteMessage.data?.user_id;
+
+  if (
+    notificationUserId &&
+    currentUserId &&
+    notificationUserId !== currentUserId
+  ) {
+    console.log('Received notification for another user, ignoring.');
+    return;
+  }
   await notifee.displayNotification({
     title: remoteMessage.notification?.title ?? '',
     body: remoteMessage.notification?.body ?? '',
     data: remoteMessage.data,
-    android: {
-      channelId: CHANNEL_ID,
-      pressAction: {id: 'default'},
-    },
-    // ⚠️ FIX 2: Added iOS config so it actually makes a sound and shows a banner in foreground
-    ios: {
-      sound: 'default',
-    },
+    android: {channelId: CHANNEL_ID, pressAction: {id: 'default'}},
+    ios: {sound: 'default'},
   });
 }
 
-// ⚠️ FIX 3: Exported this function so RootNavigation can use it for Killed State
 export function handleNotification(data?: any) {
   if (!data) return;
-  console.log('Notification Data received:', data);
+  const currentUserId = getPrefsValue(STORAGE.USER_ID);
+  const notificationUserId = data?.user_id;
+  if (
+    notificationUserId &&
+    currentUserId &&
+    notificationUserId !== currentUserId
+  )
+    return;
 
   const token = getPrefsValue(STORAGE.TOKEN);
-  if (!token) {
-    console.log('User not logged in, skipping navigation');
-    return;
-  }
+  if (!token) return;
 
   if (data?.type === 'support_chat' && data?.conversationId) {
     const userData = getPrefsValue(STORAGE.USER_DATA);
     let userInfo = null;
     try {
       userInfo = userData ? JSON.parse(userData) : null;
-    } catch (e) {
-      console.log('Error parsing user data', e);
-    }
+    } catch (e) {}
 
     setTimeout(() => {
       if (userInfo?.role === 'admin') {

@@ -19,6 +19,7 @@ import {useAppDispatch, useAppSelector} from '@redux/reduxHook';
 import {setIsLogin} from '@redux/app-slice';
 import {useText} from '@localization';
 import useProfileMenuData from './profileMenuData';
+import {useLazyLogoutQuery} from '@redux/auth-api-slice';
 
 const ProfileView: FC = () => {
   const Profile = useAppSelector(state => state.app.userInfo);
@@ -27,13 +28,21 @@ const ProfileView: FC = () => {
   const dispatch = useAppDispatch();
   const {TEXT} = useText();
   const {profileMenu} = useProfileMenuData();
-  const logout = () => {
+  const [triggerLogout] = useLazyLogoutQuery();
+
+  const logout = async () => {
+    try {
+      triggerLogout(null).unwrap().catch(console.error);
+    } catch (e) {
+      console.log('Logout API error (non-blocking)', e);
+    }
     dispatch(setIsLogin(false));
     setPrefsValue(STORAGE.TOKEN, '');
     setPrefsValue(STORAGE.USER_ID, '');
-    setPrefsValue(STORAGE.FCM_TOKEN, '');
+    setPrefsValue(STORAGE.ISLOGGED, '');
+    setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, '');
+    setPrefsValue(STORAGE.REGISTERED_USER_ID, '');
   };
-
   return (
     <AppView customViewStyle={{paddingBottom: 0}}>
       <AppHeader title={TEXT.PROFILE} isLeftIcon={false} />

@@ -241,4 +241,5 @@ export default {
   MESSAGE_DELETED: 'Nachricht gelöscht',
   FAILED_TO_DELETE_MESSAGE: 'Nachricht konnte nicht gelöscht werden',
   LOGIN_SUCCESS: 'Du hast Dich erfolgreich angemeldet.',
+  SIGNUP_SUCCESS: 'Du hast Dein Konto erfolgreich erstellt.',
 };

@@ -155,14 +155,14 @@ const OTPVerification: FC = () => {
 
   const handleForgotOtpVerify = async (params: ForgotResetPasswordParams) => {
     try {
-      const response = await forgotOtpVerify(params).unwrap();
+      const response: any = await forgotOtpVerify(params).unwrap();
       if (response.success) {
         const resp = response.token;
         navigate(RouteNames.RESET_PASSWORD, {
           token: resp || resendToken,
         });
         Toast.show({
-          text1: response?.message || 'success',
+          text1: TEXT.SIGNUP_SUCCESS,
           type: 'success',
         });
       } else {

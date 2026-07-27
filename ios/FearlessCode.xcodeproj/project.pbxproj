@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0F5BF3029DE0541AFF0588E0 /* Pods_FearlessCode.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CBB1D4C9049ED731B43E8D0 /* Pods_FearlessCode.framework */; };
 		129FCA102EC5C8A6008C5B6F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		24267238AD9F4EE79580249A /* Urbanist-ExtraLight.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DCE5C35CEA274088B1F1DAE3 /* Urbanist-ExtraLight.ttf */; };
@@ -17,7 +18,6 @@
 		8C9292D3435A474995796C05 /* Urbanist-Black.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9DA736C65EBE4E269759336E /* Urbanist-Black.ttf */; };
 		A51D4415300BD52E006661C0 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A51D4414300BD52E006661C0 /* GoogleService-Info.plist */; };
 		ABFEF84C6E4A496FA242CDCB /* Urbanist-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4FD45AB9F59B47EA9E8E619A /* Urbanist-SemiBold.ttf */; };
-		B6C1C0A9DD41CFE8E6566D9D /* libPods-FearlessCode.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D646F360E20B5482CE2A6CE /* libPods-FearlessCode.a */; };
 		DFEA3A07CD014C95B6CAB94C /* Urbanist-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7D5E55EE704545CBAF49555E /* Urbanist-Bold.ttf */; };
 		E5714C9296AD4FEFAD79FAB9 /* Urbanist-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2550832D9BC349D9BC0CFA7E /* Urbanist-Medium.ttf */; };
 		E6259D3E4ED44449B188C06F /* Urbanist-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E3F2EADC72FE4A53AB6A354E /* Urbanist-Regular.ttf */; };
@@ -34,7 +34,7 @@
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = FearlessCode/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		2550832D9BC349D9BC0CFA7E /* Urbanist-Medium.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Urbanist-Medium.ttf"; path = "../app/assets/fonts/Urbanist-Medium.ttf"; sourceTree = "<group>"; };
 		30951D06D4254AC5B29B6328 /* Urbanist-ExtraBold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Urbanist-ExtraBold.ttf"; path = "../app/assets/fonts/Urbanist-ExtraBold.ttf"; sourceTree = "<group>"; };
-		4D646F360E20B5482CE2A6CE /* libPods-FearlessCode.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-FearlessCode.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3CBB1D4C9049ED731B43E8D0 /* Pods_FearlessCode.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_FearlessCode.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		4FD45AB9F59B47EA9E8E619A /* Urbanist-SemiBold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Urbanist-SemiBold.ttf"; path = "../app/assets/fonts/Urbanist-SemiBold.ttf"; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = FearlessCode/AppDelegate.swift; sourceTree = "<group>"; };
 		7D5E55EE704545CBAF49555E /* Urbanist-Bold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Urbanist-Bold.ttf"; path = "../app/assets/fonts/Urbanist-Bold.ttf"; sourceTree = "<group>"; };
@@ -54,7 +54,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B6C1C0A9DD41CFE8E6566D9D /* libPods-FearlessCode.a in Frameworks */,
+				0F5BF3029DE0541AFF0588E0 /* Pods_FearlessCode.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -80,7 +80,7 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				4D646F360E20B5482CE2A6CE /* libPods-FearlessCode.a */,
+				3CBB1D4C9049ED731B43E8D0 /* Pods_FearlessCode.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -431,6 +431,17 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"${PODS_CONFIGURATION_BUILD_DIR}/ReactCommon/ReactCommon.framework/Headers",
+					"${PODS_CONFIGURATION_BUILD_DIR}/ReactCommon/ReactCommon.framework/Headers/react/nativemodule/core",
+					"${PODS_CONFIGURATION_BUILD_DIR}/ReactCommon-Samples/ReactCommon_Samples.framework/Headers",
+					"${PODS_CONFIGURATION_BUILD_DIR}/ReactCommon-Samples/ReactCommon_Samples.framework/Headers/platform/ios",
+					"${PODS_CONFIGURATION_BUILD_DIR}/React-Fabric/React_Fabric.framework/Headers/react/renderer/components/view/platform/cxx",
+					"${PODS_CONFIGURATION_BUILD_DIR}/React-NativeModulesApple/React_NativeModulesApple.framework/Headers",
+					"${PODS_CONFIGURATION_BUILD_DIR}/React-graphics/React_graphics.framework/Headers",
+					"${PODS_CONFIGURATION_BUILD_DIR}/React-graphics/React_graphics.framework/Headers/react/renderer/graphics/platform/ios",
+				);
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					/usr/lib/swift,
@@ -504,6 +515,17 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"${PODS_CONFIGURATION_BUILD_DIR}/ReactCommon/ReactCommon.framework/Headers",
+					"${PODS_CONFIGURATION_BUILD_DIR}/ReactCommon/ReactCommon.framework/Headers/react/nativemodule/core",
+					"${PODS_CONFIGURATION_BUILD_DIR}/ReactCommon-Samples/ReactCommon_Samples.framework/Headers",
+					"${PODS_CONFIGURATION_BUILD_DIR}/ReactCommon-Samples/ReactCommon_Samples.framework/Headers/platform/ios",
+					"${PODS_CONFIGURATION_BUILD_DIR}/React-Fabric/React_Fabric.framework/Headers/react/renderer/components/view/platform/cxx",
+					"${PODS_CONFIGURATION_BUILD_DIR}/React-NativeModulesApple/React_NativeModulesApple.framework/Headers",
+					"${PODS_CONFIGURATION_BUILD_DIR}/React-graphics/React_graphics.framework/Headers",
+					"${PODS_CONFIGURATION_BUILD_DIR}/React-graphics/React_graphics.framework/Headers/react/renderer/graphics/platform/ios",
+				);
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					/usr/lib/swift,

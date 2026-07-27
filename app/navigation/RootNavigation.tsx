@@ -1,24 +1,16 @@
-import React, {useEffect, useState} from 'react'; // <-- ADDED useState
+import React, {useEffect} from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import DashboardStack from './stacks/DashboardStack';
-import {getPrefsValue, setPrefsValue, RouteNames} from '@utils';
-import {
-  Platform,
-  View,
-  Text,
-  TouchableOpacity,
-  Clipboard,
-  StyleSheet,
-} from 'react-native'; // <-- ADDED UI imports
-import Toast from 'react-native-toast-message';
+import {getPrefsValue, setPrefsValue} from '@utils';
+import {Platform, View, StyleSheet} from 'react-native';
 import AuthStack from './stacks/AuthStack';
-import {STORAGE, TOAST_CONFIG} from '@constants';
+import {STORAGE} from '@constants';
 import {useAppDispatch, useAppSelector} from '../redux/reduxHook';
-import {setCurrentLanguage} from '@redux/app-slice';
-import {setIsInternetConnected} from '@redux/app-slice';
+import {setCurrentLanguage, setIsInternetConnected} from '@redux/app-slice';
 import {addEventListener} from '@react-native-community/netinfo';
 import {useGetLanguagesQuery} from '@redux/auth-api-slice';
 import {getCountry, getLocales} from 'react-native-localize';
+import messaging from '@react-native-firebase/messaging'; // ✅ ADDED: To fetch token directly if MMKV is empty
 
 import useNotifications, {
   getPendingNotification,
@@ -35,14 +27,7 @@ const RootNavigation = () => {
   const stored = getPrefsValue(STORAGE.CURRENT_LANGUAGE) as 'en' | 'de';
   const [registerDeviceToken] = useRegisterDeviceTokenMutation();
 
-  const [visibleToken, setVisibleToken] = useState<any>(null);
-
-  // <-- CHANGED: Pass callback to hook to get token instantly
-  //@ts-ignore
-  useNotifications(token => {
-    console.log('Token received in RootNavigation:', token);
-    setVisibleToken(token);
-  });
+  useNotifications();
 
   // LANGUAGE & INTERNET LOGIC
   useEffect(() => {
@@ -91,55 +76,82 @@ const RootNavigation = () => {
     }
   }, [isLogin]);
 
-  // API INTEGRATION
   useEffect(() => {
     if (!isLogin) return;
 
     const handleTokenRegistration = async () => {
       try {
+        console.log('========================================');
+        console.log('🔄 TOKEN REGISTRATION CHECK');
+        console.log('========================================');
+
         let fcmToken = getPrefsValue(STORAGE.FCM_TOKEN);
-
-        if (fcmToken) {
-          fcmToken = fcmToken.trim();
+        if (!fcmToken) {
+          console.log(
+            '⚠️ FCM Token missing from MMKV, asking Firebase directly...',
+          );
+          fcmToken = await messaging().getToken();
+          if (fcmToken) {
+            setPrefsValue(STORAGE.FCM_TOKEN, fcmToken);
+          }
         }
-        setVisibleToken(fcmToken);
 
-        if (!fcmToken) return;
+        if (!fcmToken) {
+          console.log(' No FCM token available at all. Aborting.');
+          return;
+        }
 
+        fcmToken = fcmToken.trim();
+
+        const currentUserId = getPrefsValue(STORAGE.USER_ID);
         const registeredToken = getPrefsValue(STORAGE.REGISTERED_FCM_TOKEN);
+        const registeredUserId = getPrefsValue(STORAGE.REGISTERED_USER_ID);
 
-        if (registeredToken !== fcmToken) {
-          const response = await registerDeviceToken({
+        // --- CONSOLE LOGS ---
+        console.log(
+          'Current FCM Token     :',
+          fcmToken?.substring(0, 15) + '...',
+        );
+        console.log('Current User ID       :', currentUserId);
+        console.log(
+          'Registered FCM Token  :',
+          registeredToken?.substring(0, 15) + '...',
+        );
+        console.log('Registered User ID    :', registeredUserId);
+        // ---------------------
+
+        const isTokenChanged = registeredToken !== fcmToken;
+        const isUserChanged = registeredUserId !== currentUserId;
+
+        // --- CONSOLE LOGS ---
+        console.log('Is Token Changed?     :', isTokenChanged);
+        console.log('Is User Changed?      :', isUserChanged);
+        // ---------------------
+
+        if (isTokenChanged || isUserChanged) {
+          console.log('ACTION: Calling API to register token!');
+
+          await registerDeviceToken({
             device_token: fcmToken,
             device_type: Platform.OS as 'android' | 'ios',
           }).unwrap();
-
-          await setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, fcmToken);
+          setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, fcmToken);
+          setPrefsValue(STORAGE.REGISTERED_USER_ID, currentUserId || '');
         } else {
-          console.log('Token already registered, skipping API.');
+          console.log(
+            '⏭️ ACTION: Skipping API (Already registered for this user).',
+          );
         }
+        console.log('========================================\n');
       } catch (error) {
-        console.error('API ERROR RESPONSE:', error);
+        console.error('❌ API ERROR RESPONSE:', error);
       }
     };
 
     handleTokenRegistration();
-  }, [isLogin, registerDeviceToken]);
-
-  // <-- ADDED: Copy function
-  const copyTokenToClipboard = () => {
-    if (visibleToken) {
-      Clipboard.setString(visibleToken);
-      Toast.show({
-        type: 'success',
-        text1: 'Token Copied to Clipboard!',
-        position: 'top',
-      });
-    }
-  };
+  }, [isLogin, registerDeviceToken]); // Re-run when login status changes
 
   return (
-    // <-- WRAPPED IN VIEW
     <View style={styles.flexContainer}>
       <NavigationContainer ref={navigationRef}>
         {!isLogin ? <AuthStack /> : <DashboardStack />}
@@ -148,34 +160,9 @@ const RootNavigation = () => {
   );
 };
 
-// <-- ADDED: Styles
 const styles = StyleSheet.create({
   flexContainer: {
     flex: 1,
-  },
-  tokenBox: {
-    position: 'absolute',
-    top: 60,
-    left: 10,
-    right: 10,
-    backgroundColor: 'rgba(0, 40, 0, 0.95)',
-    padding: 15,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#00FF00',
-    zIndex: 9999,
-    elevation: 9999,
-  },
-  tokenLabel: {
-    color: '#00FF00',
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  tokenText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontFamily: 'monospace',
   },
 });
 

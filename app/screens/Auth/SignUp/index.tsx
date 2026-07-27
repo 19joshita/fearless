@@ -31,7 +31,7 @@ import {goBack, navigate, replace} from '@navigation-utils';
 import Toast from 'react-native-toast-message';
 import {useNavigationState} from '@react-navigation/native';
 import {KeyboardAwareScrollView} from 'react-native-keyboard-controller';
-import {translate, useText} from '@localization';
+import {useText} from '@localization';
 
 const SignUp: FC = () => {
   const {bottom} = useSafeAreaInsets();
@@ -66,9 +66,8 @@ const SignUp: FC = () => {
       Toast.show({
         text1: response?.message,
         type: 'success',
-      });
+    });
     } else {
-      console.error('Error:', response.error);
       Toast.show({
         text1: response?.error,
         type: 'error',
