@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
   avatar: {
     height: scaleSize(32),
     width: scaleSize(32),
-    borderRadius: scaleSize(16),
+    borderRadius: scaleSize(99),
   },
   inputWrapper: {flex: 1, position: 'relative' as const},
   bubblePointer: {

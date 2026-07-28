@@ -7,6 +7,7 @@ import {
   NativeSyntheticEvent,
   TextInputKeyPressEventData,
   Platform,
+  TextInputProps,
 } from 'react-native';
 import React, {FC, useRef} from 'react';
 import styles from './styles';
@@ -47,6 +48,7 @@ interface GTInputProps {
   testID?: string;
   isOTP?: boolean;
   autoFocus?: boolean;
+  autoComplete?: TextInputProps['autoComplete'];
 }
 
 /**
@@ -108,6 +110,7 @@ const AppTextInput: FC<GTInputProps> = React.forwardRef(
       testID,
       isOTP,
       autoFocus = false,
+      autoComplete,
     },
     ref,
   ) => {
@@ -176,6 +179,7 @@ const AppTextInput: FC<GTInputProps> = React.forwardRef(
             maxLength={maxLength || 10000000000}
             onKeyPress={event => onKeyPress && onKeyPress(event)}
             allowFontScaling={false}
+            autoComplete={autoComplete}
           />
           {rightIcon && (
             <TouchableOpacity

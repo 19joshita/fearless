@@ -107,7 +107,12 @@ const Login: FC = () => {
           placeholder={TEXT.ENTER_YOUR_EMAIL}
           leftIcon={<ICON_EMAIL />}
           input={formik.values.emailAddress}
-          setInput={formik.handleChange('emailAddress')}
+          setInput={text => {
+            formik.setFieldValue('emailAddress', text);
+            if (formik.errors.emailAddress) {
+              formik.validateField('emailAddress');
+            }
+          }}
           isError={formik?.errors?.emailAddress}
         />
         <AppTextInput
@@ -115,10 +120,16 @@ const Login: FC = () => {
           leftIcon={<ICON_PASSWORD />}
           rightIcon={!showPassword ? <ICON_SHOW /> : <ICON_HIDE />}
           secureTextEntry={!showPassword}
-          keyboardType={'default'}
+          keyboardType="default"
           input={formik.values.password}
-          setInput={formik.handleChange('password')}
-          isError={formik?.errors?.password}
+          setInput={text => {
+            formik.setFieldValue('password', text);
+
+            if (formik.errors.password) {
+              formik.validateField('password');
+            }
+          }}
+          isError={formik.errors.password}
           onRightIconPress={handleShowHidePassword}
         />
         <AppLabel
