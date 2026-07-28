@@ -55,7 +55,7 @@ const OTPVerification: FC = () => {
         // Alert.alert('OTP verified');
         // resetAndNavigate(RouteNames.HOME);
         Toast.show({
-          text1: response?.message,
+          text1: TEXT.SIGNUP_SUCCESS,
           type: 'success',
         });
         dispatch(setUserInfo(response?.data));
@@ -72,10 +72,10 @@ const OTPVerification: FC = () => {
         err?.data?.error || 'Failed to verify OTP',
       );
       // formik.resetForm();
-      // Alert.alert(
-      //   'OTP Error',
-      //   err?.data?.error || err?.error || 'Failed to verify OTP',
-      // );
+      Alert.alert(
+        'OTP Error',
+        err?.data?.error || err?.error || 'Failed to verify OTP',
+      );
     }
   };
 
@@ -95,27 +95,19 @@ const OTPVerification: FC = () => {
         const token = response?.token;
         setResendToken(token);
         Toast.show({
-          text1: response?.message,
+          text1: TEXT.SIGNUP_SUCCESS,
           type: 'success',
         });
         // Optionally, store or use the returned token
         console.log('Token:', response.token);
         return true;
       } else {
-        // showMessage({
-        //   message: response.error,
-        //   type: 'danger',
-        // });
-        // Alert.alert('Error', response?.error);
+        Alert.alert('Error', response?.error);
       }
       return false;
     } catch (error: any) {
       const errMsg = error?.data?.error || 'Something went wrong';
-      // showMessage({
-      //   message: errMsg,
-      //   type: 'danger',
-      // });
-      // Alert.alert('Error', errMsg);
+      Alert.alert('Error', errMsg);
       return false;
     }
   };

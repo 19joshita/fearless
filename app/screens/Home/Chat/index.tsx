@@ -109,6 +109,7 @@ const Chat = () => {
   ] = useLazyExportChatQuery();
   const [downloadingFile, setDownloadingFile] = useState<boolean>(false);
   const Profile = useAppSelector(state => state?.app?.userInfo);
+  console.log("Profile===>",Profile)
   const isConnected = useAppSelector(state => state?.app?.isInternetConnected);
 
   const [triggerCreateChatRoom, {isLoading: createRoomLoading}] =

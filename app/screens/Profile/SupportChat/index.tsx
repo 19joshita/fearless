@@ -1,4 +1,4 @@
-import React, {useRef, useState, useEffect, useCallback} from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 
 import {
   View,
@@ -15,14 +15,14 @@ import {
   NativeScrollEvent,
 } from 'react-native';
 
-import Video, {VideoRef} from 'react-native-video';
-import {AppView, ChatHeader, ChatInput} from '@components';
-import {COLORS, FONT_FAMILY, FONT_VARIENTS, scaleSize, SPACING} from '@theme';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import Animated, {useAnimatedStyle} from 'react-native-reanimated';
-import {RouteProp, useRoute, useFocusEffect} from '@react-navigation/native';
-import {useText} from '@localization';
-import {useAppSelector} from '@redux/reduxHook';
+import Video, { VideoRef } from 'react-native-video';
+import { AppView, ChatHeader, ChatInput } from '@components';
+import { COLORS, FONT_FAMILY, FONT_VARIENTS, scaleSize, SPACING } from '@theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import { RouteProp, useRoute, useFocusEffect } from '@react-navigation/native';
+import { useText } from '@localization';
+import { useAppSelector } from '@redux/reduxHook';
 import Toast from 'react-native-toast-message';
 
 import {
@@ -41,13 +41,13 @@ import {
   ICON_DELETE,
 } from '@assets/icons';
 
-import type {Message} from 'types/support-chat';
-import {AppImage} from '@global-components';
+import type { Message } from 'types/support-chat';
+import { AppImage } from '@global-components';
 import useKeyboardAnimation from './../../Home/Chat/UseKeyboardAnimation';
 import useIsTabScreen from './../../Home/Chat/useIsTabScreen';
-import {useAudioRecorder, useGalleryPicker} from '@redux/useChatMedia';
-import {useSupportChatSocket} from './../../../hooks/useSupportChatSocket';
-import {store} from '@redux/store';
+import { useAudioRecorder, useGalleryPicker } from '@redux/useChatMedia';
+import { useSupportChatSocket } from './../../../hooks/useSupportChatSocket';
+import { store } from '@redux/store';
 
 // --- Types ---
 
@@ -58,18 +58,18 @@ type SupportChatRouteParams = {
 };
 
 type RouteProps = RouteProp<
-  {SupportChat: SupportChatRouteParams},
+  { SupportChat: SupportChatRouteParams },
   'SupportChat'
 >;
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const WAVEFORM_HEIGHTS = Array.from(
-  {length: 20},
+  { length: 20 },
   () => Math.floor(Math.random() * 16) + 6,
 );
 
-const MessageStatusTick = ({status}: {status?: string | null}) => {
+const MessageStatusTick = ({ status }: { status?: string | null }) => {
   if (!status) return null;
 
   const tickColor = status === 'read' ? '#34B7F1' : COLORS.GRAY_TEXT_COLOR;
@@ -82,7 +82,7 @@ const MessageStatusTick = ({status}: {status?: string | null}) => {
         borderLeftWidth: scaleSize(1.5),
         borderBottomWidth: scaleSize(1.5),
         borderColor: tickColor,
-        transform: [{rotate: '-45deg'}],
+        transform: [{ rotate: '-45deg' }],
         marginBottom: scaleSize(1.5),
       }}
     />
@@ -97,7 +97,7 @@ const MessageStatusTick = ({status}: {status?: string | null}) => {
         height: scaleSize(10),
       }}>
       {tickMark}
-      {!isSent && <View style={{marginLeft: -scaleSize(3)}}>{tickMark}</View>}
+      {!isSent && <View style={{ marginLeft: -scaleSize(3) }}>{tickMark}</View>}
     </View>
   );
 };
@@ -106,7 +106,7 @@ const MessageStatusTick = ({status}: {status?: string | null}) => {
 
 const SupportChat = () => {
   const route = useRoute<RouteProps>();
-  const {selectedMedia, pickMedia, reset: resetGallery} = useGalleryPicker();
+  const { selectedMedia, pickMedia, reset: resetGallery } = useGalleryPicker();
   const [deleteSupportMessage] = useDeleteMessageMutation();
   const [markMessagesAsRead] = useMarkMessagesAsReadMutation();
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -120,9 +120,9 @@ const SupportChat = () => {
     reset: resetAudio,
   } = useAudioRecorder();
 
-  const {mode = 'user', conversationId, userName} = route.params ?? {};
-  const {TEXT} = useText();
-  const {bottom} = useSafeAreaInsets();
+  const { mode = 'user', conversationId, userName } = route.params ?? {};
+  const { TEXT } = useText();
+  const { bottom } = useSafeAreaInsets();
   const profile = useAppSelector(state => state.app?.userInfo);
   const flatListRef = useRef<FlatList>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -156,7 +156,7 @@ const SupportChat = () => {
   const [isModalVideoLoading, setIsModalVideoLoading] = useState(false);
   const audioPlayerRef = useRef<VideoRef>(null);
 
-  const {height} = useKeyboardAnimation();
+  const { height } = useKeyboardAnimation();
   const isTabScreen = useIsTabScreen();
   const tabBarHeight = isTabScreen ? scaleSize(70) : 0;
   const fakeView = useAnimatedStyle(
@@ -167,12 +167,12 @@ const SupportChat = () => {
     [bottom, tabBarHeight],
   );
 
-  const {messages: socketMessages, presenceMap} = useSupportChatSocket(
+  const { messages: socketMessages, presenceMap } = useSupportChatSocket(
     conversationId ?? null,
   );
 
   const [sendMessage] = useSendSupportMessageMutation();
-  const [uploadFile, {isLoading: isUploading}] =
+  const [uploadFile, { isLoading: isUploading }] =
     useUploadSupportChatFileMutation();
 
   // ==========================================
@@ -188,8 +188,8 @@ const SupportChat = () => {
     isFetching: isApiFetching,
     refetch,
   } = useGetSupportChatMessagesQuery(
-    {conversationId: conversationId ?? '', page: 1, limit},
-    {skip: !conversationId},
+    { conversationId: conversationId ?? '', page: 1, limit },
+    { skip: !conversationId },
   );
 
   const participants = messagesData?.data?.participants ?? [];
@@ -216,7 +216,7 @@ const SupportChat = () => {
       setMessages(prev =>
         prev.map(msg =>
           messageIds.includes(msg.id) && msg.sender_type !== senderType
-            ? {...msg, status: 'read' as const}
+            ? { ...msg, status: 'read' as const }
             : msg,
         ),
       );
@@ -231,7 +231,7 @@ const SupportChat = () => {
         setMessages(prev =>
           prev.map(msg =>
             messageIds.includes(msg.id) && msg.sender_type !== senderType
-              ? {...msg, status: 'delivered' as const}
+              ? { ...msg, status: 'delivered' as const }
               : msg,
           ),
         );
@@ -254,7 +254,7 @@ const SupportChat = () => {
         }, 500);
         return () => clearTimeout(timer);
       }
-      return () => {};
+      return () => { };
     }, [conversationId, handleMarkAsRead, senderType]),
   );
 
@@ -303,7 +303,7 @@ const SupportChat = () => {
         type: 'success',
         text1: TEXT.MESSAGE_DELETED,
       });
-    } catch (error: any) {}
+    } catch (error: any) { }
   };
 
   const handleUploadFile = useCallback(
@@ -320,7 +320,7 @@ const SupportChat = () => {
         setUploadedUrl(response.url);
         return response.url;
       } catch (error) {
-        Toast.show({type: 'error', text1: 'Failed to upload file'});
+        Toast.show({ type: 'error', text1: 'Failed to upload file' });
         setUploadedType(null);
         setUploadedDuration(null);
         return null;
@@ -377,7 +377,7 @@ const SupportChat = () => {
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       if (isAdjustingScroll.current || isLoadingMore) return;
 
-      const {contentOffset, contentSize} = event.nativeEvent;
+      const { contentOffset, contentSize } = event.nativeEvent;
 
       if (contentOffset.y <= 50 && hasMore && !isApiFetching && !isRefreshing) {
         isAdjustingScroll.current = true;
@@ -416,7 +416,7 @@ const SupportChat = () => {
         }
       } else if (isInitialLoad.current && newHeight > 0) {
         setTimeout(() => {
-          flatListRef.current?.scrollToEnd({animated: false});
+          flatListRef.current?.scrollToEnd({ animated: false });
           isInitialLoad.current = false;
         }, 100);
       }
@@ -474,7 +474,7 @@ const SupportChat = () => {
       incomingSocketMsgs.forEach(socketMsg => {
         if (prevIds.has(socketMsg.id)) {
           updated = updated.map(m =>
-            m.id === socketMsg.id ? {...m, status: socketMsg.status} : m,
+            m.id === socketMsg.id ? { ...m, status: socketMsg.status } : m,
           );
         } else if (socketMsg.sender_type !== senderType) {
           updated.push(socketMsg);
@@ -489,7 +489,7 @@ const SupportChat = () => {
     });
 
     if (newMsgsFromOthers.length > 0) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({animated: true}), 100);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
 
       if (conversationId) {
         handleMarkAsRead(newMsgsFromOthers.map(m => m.id));
@@ -500,7 +500,7 @@ const SupportChat = () => {
           store.dispatch(
             supportChatSlice.util.updateQueryData(
               'getAdminConversations',
-              {page: 1, limit: 20},
+              { page: 1, limit: 20 },
               (draft: any) => {
                 if (!draft.data) return;
                 const index = draft.data.findIndex(
@@ -520,13 +520,13 @@ const SupportChat = () => {
               },
             ),
           );
-        } catch (e) {}
+        } catch (e) { }
       });
     }
   }, [socketMessages, senderType, conversationId, handleMarkAsRead]);
 
   const scrollToBottom = () => {
-    setTimeout(() => flatListRef.current?.scrollToEnd({animated: true}), 150);
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 150);
   };
 
   const handleSend = async (text: string) => {
@@ -571,9 +571,7 @@ const SupportChat = () => {
     try {
       const result: any = await sendMessage(payload).unwrap();
       if (result?.data) {
-        setMessages(prev =>
-          prev.map(m => (m.id === tempId ? result.data : m)),
-        );
+        setMessages(prev => prev.map(m => (m.id === tempId ? result.data : m)));
       }
       if (isMedia) handleRemoveMedia();
     } catch (error) {
@@ -601,7 +599,7 @@ const SupportChat = () => {
 
   const openMediaModal = (url: string, type: 'image' | 'video') => {
     if (type === 'video') setIsModalVideoLoading(true);
-    setMediaModal({url, type});
+    setMediaModal({ url, type });
   };
 
   const closeMediaModal = () => {
@@ -609,7 +607,7 @@ const SupportChat = () => {
     setIsModalVideoLoading(false);
   };
 
-  const renderMessage = ({item}: {item: Message}) => {
+  const renderMessage = ({ item }: { item: Message }) => {
     const isMe = item.sender_type === senderType;
     const isDeleted = deletedIds.has(item.id);
     const isMenuOpen = menuVisibleId === item.id;
@@ -628,7 +626,7 @@ const SupportChat = () => {
             onPress={() => openMediaModal(item.media_url!, 'image')}
             style={styles.mediaContainer}>
             <Image
-              source={{uri: item.media_url}}
+              source={{ uri: item.media_url }}
               style={styles.mediaImage}
               resizeMode="cover"
             />
@@ -644,7 +642,7 @@ const SupportChat = () => {
             style={styles.mediaContainer}>
             <View style={styles.videoContainer}>
               <Video
-                source={{uri: item.media_url}}
+                source={{ uri: item.media_url }}
                 style={styles.mediaImage}
                 resizeMode="cover"
                 paused={true}
@@ -679,12 +677,12 @@ const SupportChat = () => {
               style={[
                 styles.audioPlayBtn,
                 isPlaying &&
-                  !isLoading && {backgroundColor: COLORS.GRAY_TEXT_COLOR},
+                !isLoading && { backgroundColor: COLORS.GRAY_TEXT_COLOR },
               ]}>
               {isLoading ? (
                 <ActivityIndicator size="small" color="#FFF" />
               ) : isPlaying ? (
-                <View style={{flexDirection: 'row', gap: 2.5}}>
+                <View style={{ flexDirection: 'row', gap: 2.5 }}>
                   <View style={styles.pauseBar} />
                   <View style={styles.pauseBar} />
                 </View>
@@ -791,9 +789,9 @@ const SupportChat = () => {
               <Text style={styles.time}>
                 {item.created_at
                   ? new Date(item.created_at).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
                   : ''}
               </Text>
               {isMe && !isDeleted && <MessageStatusTick status={item.status} />}
@@ -838,7 +836,7 @@ const SupportChat = () => {
   };
 
   const handlePickMedia = () =>
-    pickMedia({mediaType: 'mixed', selectionLimit: 1});
+    pickMedia({ mediaType: 'mixed', selectionLimit: 1 });
 
   // Pull to refresh: reset limit back to 20 and invalidate cache
   const onRefresh = useCallback(() => {
@@ -852,7 +850,7 @@ const SupportChat = () => {
     if (conversationId) {
       store.dispatch(
         supportChatSlice.util.invalidateTags([
-          {type: 'SupportChat', id: `Messages-${conversationId}`},
+          { type: 'SupportChat', id: `Messages-${conversationId}` },
         ]),
       );
     }
@@ -868,7 +866,7 @@ const SupportChat = () => {
             : TEXT.SUPPORT_CHAT ?? 'Support Chat'
         }
         status={isOtherUserOnline ? 'online' : undefined}
-        onlayout={() => {}}
+        onlayout={() => { }}
       />
 
       <FlatList
@@ -879,7 +877,7 @@ const SupportChat = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.listContent,
-          messages.length === 0 ? {justifyContent: 'center'} : undefined,
+          messages.length === 0 ? { justifyContent: 'center' } : undefined,
         ]}
         onScroll={handleScroll}
         scrollEventThrottle={16}
@@ -937,7 +935,7 @@ const SupportChat = () => {
 
             {mediaModal?.type === 'image' && (
               <Image
-                source={{uri: mediaModal.url}}
+                source={{ uri: mediaModal.url }}
                 style={styles.modalImage}
                 resizeMode="contain"
               />
@@ -949,14 +947,14 @@ const SupportChat = () => {
                   <ActivityIndicator
                     size="large"
                     color={COLORS.WHITE_COLOR}
-                    style={{position: 'absolute', zIndex: 10}}
+                    style={{ position: 'absolute', zIndex: 10 }}
                   />
                 )}
 
                 <Video
                   key={mediaModal.url}
-                  source={{uri: mediaModal.url}}
-                  style={{width: '100%', height: '100%'}}
+                  source={{ uri: mediaModal.url }}
+                  style={{ width: '100%', height: '100%' }}
                   resizeMode="contain"
                   controls={true}
                   paused={false}
@@ -984,7 +982,7 @@ const SupportChat = () => {
 export default SupportChat;
 
 const styles = StyleSheet.create({
-  screen: {paddingBottom: 0},
+  screen: { paddingBottom: 0 },
   listContent: {
     flexGrow: 1,
     backgroundColor: COLORS.APP_BACKGROUND,
@@ -997,16 +995,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     marginVertical: scaleSize(6),
   },
-  rowReverse: {flexDirection: 'row-reverse'},
-  bubbleWrapper: {maxWidth: SCREEN_WIDTH * 0.7, position: 'relative'},
+  rowReverse: { flexDirection: 'row-reverse' },
+  bubbleWrapper: { maxWidth: SCREEN_WIDTH * 0.7, position: 'relative' },
   bubble: {
     borderRadius: SPACING.custom(12),
     paddingVertical: SPACING.xs,
     paddingHorizontal: SPACING.m,
     minHeight: scaleSize(44),
   },
-  myBubble: {backgroundColor: '#E7E6DC'},
-  otherBubble: {backgroundColor: COLORS.WHITE_COLOR},
+  myBubble: { backgroundColor: '#E7E6DC' },
+  otherBubble: { backgroundColor: COLORS.WHITE_COLOR },
   text: {
     fontSize: FONT_VARIENTS.custom(14),
     color: COLORS.TEXT_COLOR,
@@ -1017,14 +1015,14 @@ const styles = StyleSheet.create({
     color: COLORS.GRAY_TEXT_COLOR,
     marginTop: SPACING.xxs,
   },
-  tail: {position: 'absolute', bottom: 0},
-  tailRight: {right: -6},
-  tailLeft: {left: -6},
-  empty: {flex: 1, justifyContent: 'center', alignItems: 'center'},
-  emptyText: {color: COLORS.GRAY_TEXT_COLOR, fontSize: 15},
-  loader: {paddingVertical: SPACING.m},
-  noMoreContainer: {paddingVertical: SPACING.s, alignItems: 'center'},
-  noMoreText: {color: COLORS.GRAY_TEXT_COLOR, fontSize: scaleSize(12)},
+  tail: { position: 'absolute', bottom: 0 },
+  tailRight: { right: -6 },
+  tailLeft: { left: -6 },
+  empty: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  emptyText: { color: COLORS.GRAY_TEXT_COLOR, fontSize: 15 },
+  loader: { paddingVertical: SPACING.m },
+  noMoreContainer: { paddingVertical: SPACING.s, alignItems: 'center' },
+  noMoreText: { color: COLORS.GRAY_TEXT_COLOR, fontSize: scaleSize(12) },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1037,7 +1035,7 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT_COLOR,
     fontFamily: FONT_FAMILY.Medium,
   },
-  menuTextDelete: {color: 'red'},
+  menuTextDelete: { color: 'red' },
   deletedTextStyle: {
     fontStyle: 'italic',
     color: COLORS.GRAY_TEXT_COLOR,
@@ -1055,7 +1053,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xxs,
     backgroundColor: '#f0f0f0',
   },
-  mediaImage: {width: '100%', height: '100%', resizeMode: 'cover'},
+  mediaImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   videoContainer: {
     width: '100%',
     height: '100%',
@@ -1067,7 +1065,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '50%',
     left: '50%',
-    transform: [{translateX: -scaleSize(16)}, {translateY: -scaleSize(16)}],
+    transform: [{ translateX: -scaleSize(16) }, { translateY: -scaleSize(16) }],
     width: scaleSize(32),
     height: scaleSize(32),
     borderRadius: scaleSize(16),
@@ -1148,7 +1146,7 @@ const styles = StyleSheet.create({
     height: scaleSize(28),
     gap: scaleSize(2),
   },
-  waveBar: {width: scaleSize(3), borderRadius: scaleSize(1.5)},
+  waveBar: { width: scaleSize(3), borderRadius: scaleSize(1.5) },
   audioDurationText: {
     alignSelf: 'flex-start',
     fontSize: scaleSize(10),
@@ -1236,7 +1234,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xxs,
     minWidth: scaleSize(120),
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 6,
     elevation: 8,

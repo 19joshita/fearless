@@ -2,8 +2,8 @@ import {
   View,
   Text,
   KeyboardAvoidingView,
-  Touchable,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import React, {FC, useState} from 'react';
 import {AppButton, AppLabel, AppTextInput, AppView} from '@components';
@@ -33,47 +33,47 @@ const Login: FC = () => {
   const dispatch = useAppDispatch();
   const routes = useNavigationState(state => state.routes);
   const currentIndex = useNavigationState(state => state.index);
-
   const previousRoute = routes[currentIndex - 1]?.name;
 
-  // toggle the password state to show/hide
   const handleShowHidePassword = () => {
     setShowPassword(!showPassword);
   };
-
   const [loginApi, {isLoading}] = useLoginApiMutation();
+
   const handleLogin = async () => {
     try {
-      const response = await loginApi({
+      const response: any = await loginApi({
         email: formik.values.emailAddress,
         password: formik.values.password,
       }).unwrap();
+
       if (response?.success) {
-        // Login successful
+        // 1. Save Tokens and IDs
         setPrefsValue(STORAGE.TOKEN, response?.token);
         setPrefsValue(STORAGE.USER_ID, response?.data?.uuid);
+
+        // 2. SAVE USER DATA (Crucial for notification tap handling)
+        setPrefsValue(STORAGE.USER_DATA, JSON.stringify(response?.data));
+
+        // 3. Update Redux
         dispatch(setIsLogin(true));
         dispatch(setUserInfo(response?.data));
-        Toast.show({
-          type: 'success',
-          text1: TEXT.LOGIN_SUCCESS,
-        });
+
+        // Note: RootNavigation will handle generating the NEW FCM token
+        // as soon as isLogin turns to true.
+
+        Toast.show({type: 'success', text1: TEXT.LOGIN_SUCCESS});
       } else {
-        // API returned an error
-        // Alert.alert('Error', response?.error);
+        Alert.alert('Error', response?.error);
       }
     } catch (error: any) {
-      // Network or unexpected error
       const errMsg = error?.data?.error || 'Login failed';
-      // Alert.alert('Error', errMsg);
+      Alert.alert('Error', errMsg);
     }
   };
 
   const formik = useFormik<FormikValues>({
-    initialValues: {
-      emailAddress: '',
-      password: '',
-    },
+    initialValues: {emailAddress: '', password: ''},
     validationSchema: loginValidationSchema,
     validateOnChange: false,
     validateOnBlur: false,
@@ -89,7 +89,6 @@ const Login: FC = () => {
           fontSize={FONT_VARIENTS.custom(28)}
           fontFamily={FONT_FAMILY.Bold}
         />
-
         <AppLabel
           text={TEXT.ENTER_REQUIRED_FIELDS}
           color={COLORS.TEXT_COLOR}
@@ -130,6 +129,7 @@ const Login: FC = () => {
           onPress={() => navigate(RouteNames.FORGOT_PASSWORD)}
         />
       </View>
+
       <AppButton
         text={TEXT.LOGIN}
         onHandlePress={formik?.handleSubmit}
@@ -137,11 +137,7 @@ const Login: FC = () => {
       />
 
       <KeyboardAvoidingView
-        style={{
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'flex-end',
-        }}>
+        style={{flex: 1, alignItems: 'center', justifyContent: 'flex-end'}}>
         <AppLabel
           fontFamily={FONT_FAMILY.Medium}
           textStyle={{paddingBottom: SPACING.l}}
@@ -150,7 +146,6 @@ const Login: FC = () => {
               {TEXT.DONT_HAVE_ACCOUNT}
               <Text
                 onPress={() => {
-                  //@ts-ignore
                   previousRoute === RouteNames.SIGN_UP
                     ? goBack()
                     : navigate(RouteNames.SIGN_UP);

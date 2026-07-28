@@ -7,7 +7,7 @@ import {useLazyGetResourcesQuery} from './resources-api-slice';
 
 interface ProfileState {
   isLogin: boolean;
-  userInfo: UserData | undefined;
+  userInfo: UserData | undefined; // Initial state is undefined
   currentLanguage: Language;
   isInternetConnected: boolean;
   languages: LanguageResponse['data'];
@@ -33,7 +33,8 @@ const appSlice = createSlice({
     setIsLogin(state, action: PayloadAction<boolean>) {
       state.isLogin = action.payload;
     },
-    setUserInfo(state, action: PayloadAction<UserData>) {
+    // CHANGED HERE: Added `| undefined` to PayloadAction
+    setUserInfo(state, action: PayloadAction<UserData | undefined>) {
       state.userInfo = action.payload;
     },
     setCurrentLanguage(state, action: PayloadAction<Language>) {

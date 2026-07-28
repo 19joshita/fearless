@@ -1,4 +1,5 @@
-import { MMKV } from 'react-native-mmkv';
+import {MMKV} from 'react-native-mmkv';
+
 const storage = new MMKV();
 
 export const getPrefsValue = (key: string): string | undefined => {

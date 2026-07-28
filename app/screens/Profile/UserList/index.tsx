@@ -81,7 +81,7 @@ const UserList = () => {
 
   const allConversations: AdminConversation[] = conversationsData?.data ?? [];
 
-  // ✅ UPDATED: Filter out admins AND conversations with null last_message
+  // UPDATED: Filter out admins AND conversations with null last_message
   const conversations = allConversations.filter(c => {
     const isAdmin =
       c?.user?.email === 'admin@admin.com' ||
@@ -91,11 +91,10 @@ const UserList = () => {
   });
 
   // =========================================================================
-  // ✅ 2. ADD THIS: REFETCH ON FOCUS
+  // 2. ADD THIS: REFETCH ON FOCUS
   // =========================================================================
   useFocusEffect(
     useCallback(() => {
-      // Clear existing cache to prevent the custom `merge` logic from ignoring updates
       store.dispatch(
         supportChatSlice.util.updateQueryData(
           'getAdminConversations',

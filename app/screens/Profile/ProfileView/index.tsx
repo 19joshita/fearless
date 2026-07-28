@@ -1,5 +1,5 @@
-import {View, Text, FlatList, TouchableOpacity} from 'react-native';
-import React, {FC, useMemo, useState} from 'react';
+import {View, FlatList, TouchableOpacity} from 'react-native';
+import React, {FC, useState} from 'react';
 import {
   AppButton,
   AppConfirmationModal,
@@ -16,14 +16,15 @@ import {SPACING} from '@theme';
 import {navigate} from '@navigation-utils';
 import {formatMemberSince, RouteNames, setPrefsValue} from '@utils';
 import {useAppDispatch, useAppSelector} from '@redux/reduxHook';
-import {setIsLogin} from '@redux/app-slice';
+import {setIsLogin, setUserInfo} from '@redux/app-slice';
 import {useText} from '@localization';
 import useProfileMenuData from './profileMenuData';
 import {useLazyLogoutQuery} from '@redux/auth-api-slice';
+import messaging from '@react-native-firebase/messaging';
+import notifee from '@notifee/react-native';
 
 const ProfileView: FC = () => {
   const Profile = useAppSelector(state => state.app.userInfo);
-  const currentLanguage = useAppSelector(state => state.app.currentLanguage);
   const [isLogout, setIsLogout] = useState<boolean>(false);
   const dispatch = useAppDispatch();
   const {TEXT} = useText();
@@ -32,17 +33,44 @@ const ProfileView: FC = () => {
 
   const logout = async () => {
     try {
+      // ==========================================
+      // 1. EXPIRE/DELETE FCM TOKEN IMMEDIATELY
+      // This makes the old token physically useless. 
+      // Android can no longer show background notifications for User A.
+      // ==========================================
+      try {
+        await messaging().deleteToken();
+        console.log('✅ FCM Token Destroyed');
+      } catch (e) {
+        console.error('Failed to delete token', e);
+      }
+
+      // Clear local storage tracking variables
+      setPrefsValue(STORAGE.FCM_TOKEN, '');
+      setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, '');
+      setPrefsValue(STORAGE.REGISTERED_USER_ID, '');
+      
+      // Clear any visible notifications from the tray instantly
+      await notifee.cancelAllNotifications();
+
+      // ==========================================
+      // 2. NORMAL LOGOUT STUFF
+      // ==========================================
       triggerLogout(null).unwrap().catch(console.error);
+      
+      dispatch(setIsLogin(false));
+      dispatch(setUserInfo(undefined)); // Use undefined based on your slice
+      
+      setPrefsValue(STORAGE.TOKEN, '');
+      setPrefsValue(STORAGE.USER_ID, '');
+      setPrefsValue(STORAGE.ISLOGGED, '');
+      setPrefsValue(STORAGE.USER_DATA, '');
+
     } catch (e) {
-      console.log('Logout API error (non-blocking)', e);
+      console.log('Logout error', e);
     }
-    dispatch(setIsLogin(false));
-    setPrefsValue(STORAGE.TOKEN, '');
-    setPrefsValue(STORAGE.USER_ID, '');
-    setPrefsValue(STORAGE.ISLOGGED, '');
-    setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, '');
-    setPrefsValue(STORAGE.REGISTERED_USER_ID, '');
   };
+
   return (
     <AppView customViewStyle={{paddingBottom: 0}}>
       <AppHeader title={TEXT.PROFILE} isLeftIcon={false} />
@@ -67,28 +95,14 @@ const ProfileView: FC = () => {
         data={profileMenu}
         keyExtractor={(_, index) => index.toString()}
         renderItem={({item}) => (
-          <ProfileMenu
-            title={item.title}
-            icon={item.icon}
-            onPress={item.onPress}
-          />
+          <ProfileMenu title={item.title} icon={item.icon} onPress={item.onPress} />
         )}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          gap: SPACING.m,
-          paddingBottom: SPACING.s,
-        }}
+        contentContainerStyle={{gap: SPACING.m, paddingBottom: SPACING.s}}
         ListFooterComponent={
-          <AppButton
-            text={TEXT.LOG_OUT}
-            onHandlePress={() => setIsLogout(true)}
-          />
+          <AppButton text={TEXT.LOG_OUT} onHandlePress={() => setIsLogout(true)} />
         }
       />
-      {/* <AppButton
-        text={TEXT.LOG_OUT}
-        customStyle={{marginVertical: SPACING.m}}
-      /> */}
       <AppConfirmationModal
         visible={isLogout}
         actionPerformed={TEXT.LOG_OUT}

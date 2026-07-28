@@ -73,7 +73,7 @@ const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {
     setTimeout(() => {
       setPrefsValue(STORAGE?.ISLOGGED, '');
       setPrefsValue(STORAGE?.TOKEN, '');
-       setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, ''); 
+      setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, '');
       setPrefsValue(STORAGE.REGISTERED_USER_ID, '');
       api?.dispatch(setIsLogin(false));
       api?.dispatch(reset());
