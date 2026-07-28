@@ -15,13 +15,13 @@ import {
   NativeScrollEvent,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from 'react-native';
 
 import Video, {VideoRef} from 'react-native-video';
 import {AppView, ChatHeader, ChatInput} from '@components';
 import {COLORS, FONT_FAMILY, FONT_VARIENTS, scaleSize, SPACING} from '@theme';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import Animated, {useAnimatedStyle} from 'react-native-reanimated';
 import {RouteProp, useRoute, useFocusEffect} from '@react-navigation/native';
 import {useText} from '@localization';
 import {useAppSelector} from '@redux/reduxHook';
@@ -74,8 +74,11 @@ const WAVEFORM_HEIGHTS = Array.from(
 const MessageStatusTick = ({status}: {status?: string | null}) => {
   if (!status) return null;
 
-  const tickColor = status === 'read' ? '#34B7F1' : COLORS.GRAY_TEXT_COLOR;
-  const isSent = status === 'sent';
+  const isRead = status === 'read';
+  const isDelivered = status === 'delivered';
+  const showDouble = isDelivered || isRead;
+  const tickColor = isRead ? '#34B7F1' : COLORS.GRAY_TEXT_COLOR;
+
   const tickMark = (
     <View
       style={{
@@ -99,7 +102,9 @@ const MessageStatusTick = ({status}: {status?: string | null}) => {
         height: scaleSize(10),
       }}>
       {tickMark}
-      {!isSent && <View style={{marginLeft: -scaleSize(3)}}>{tickMark}</View>}
+      {showDouble && (
+        <View style={{marginLeft: -scaleSize(3)}}>{tickMark}</View>
+      )}
     </View>
   );
 };
@@ -132,11 +137,7 @@ const SupportChat = () => {
   const messagesRef = useRef<Message[]>([]);
   const processedSocketIdsRef = useRef<Set<number>>(new Set());
 
-  const hasMarkedAsRead = useRef(false);
-
-  const isInitialLoad = useRef(true);
-  const isAdjustingScroll = useRef(false);
-  const prevScrollHeight = useRef(0);
+  const isPaginating = useRef(false);
 
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
   const [uploadedType, setUploadedType] = useState<
@@ -157,6 +158,8 @@ const SupportChat = () => {
   } | null>(null);
   const [isModalVideoLoading, setIsModalVideoLoading] = useState(false);
   const audioPlayerRef = useRef<VideoRef>(null);
+
+  // FIX: Removed readMessageIds and deliveredMessageIds to match hook signature
   const {messages: socketMessages, presenceMap} = useSupportChatSocket(
     conversationId ?? null,
   );
@@ -167,12 +170,10 @@ const SupportChat = () => {
 
   // ==========================================
   // PAGINATION STATE
-  // Starts at 20, increases by 20 on each scroll to top
   // ==========================================
   const [limit, setLimit] = useState(20);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // API CALL: page is always 1, only limit changes
   const {
     data: messagesData,
     isFetching: isApiFetching,
@@ -193,7 +194,6 @@ const SupportChat = () => {
   const [menuVisibleId, setMenuVisibleId] = useState<number | null>(null);
   const [deletedIds, setDeletedIds] = useState<Set<number>>(new Set());
 
-  // API tells us if there are more older messages to load
   const hasMore = messagesData?.data?.pagination?.has_next_page ?? false;
 
   useEffect(() => {
@@ -230,9 +230,14 @@ const SupportChat = () => {
     [conversationId, markMessagesAsRead, senderType],
   );
 
+  // ==========================================
+  // FIX: Force refetch on focus for notifications
+  // ==========================================
   useFocusEffect(
     useCallback(() => {
       if (conversationId) {
+        refetch();
+
         const timer = setTimeout(() => {
           const currentMessages = messagesRef.current;
           const unreadIds = currentMessages
@@ -241,40 +246,38 @@ const SupportChat = () => {
           if (unreadIds.length > 0) {
             handleMarkAsRead(unreadIds);
           }
-        }, 500);
+        }, 800);
         return () => clearTimeout(timer);
       }
       return () => {};
-    }, [conversationId, handleMarkAsRead, senderType]),
+    }, [conversationId, handleMarkAsRead, senderType, refetch]),
   );
 
   useEffect(() => {
-    if (
-      messagesData?.data?.messages &&
-      !hasMarkedAsRead.current &&
-      conversationId
-    ) {
-      const unreadIds = messagesData.data.messages
-        .filter(m => m.sender_type !== senderType && m.status !== 'read')
-        .map(m => m.id);
-
-      if (unreadIds.length > 0) {
-        handleMarkAsRead(unreadIds);
-      }
-      hasMarkedAsRead.current = true;
+    if (!messagesData?.data?.messages || !conversationId) return;
+    const unreadIds = messagesData.data.messages
+      .filter(m => m.sender_type !== senderType && m.status !== 'read')
+      .map(m => m.id);
+    if (unreadIds.length > 0) {
+      handleMarkAsRead(unreadIds);
     }
   }, [messagesData, conversationId, senderType, handleMarkAsRead]);
 
   // Reset everything when conversation changes
   useEffect(() => {
-    hasMarkedAsRead.current = false;
     processedSocketIdsRef.current = new Set();
     setMessages([]);
     setLimit(20);
-    isInitialLoad.current = true;
-    isAdjustingScroll.current = false;
-    prevScrollHeight.current = 0;
+    isPaginating.current = false;
     setIsLoadingMore(false);
+
+    if (conversationId) {
+      store.dispatch(
+        supportChatSlice.util.invalidateTags([
+          {type: 'SupportChat', id: `Messages-${conversationId}`},
+        ]),
+      );
+    }
   }, [conversationId]);
 
   const handleDeleteMessage = async (messageId: number) => {
@@ -287,7 +290,6 @@ const SupportChat = () => {
       setDeletedIds(new Set());
       setMessages([]);
       setLimit(20);
-      isInitialLoad.current = true;
       refetch();
       Toast.show({
         type: 'success',
@@ -360,18 +362,18 @@ const SupportChat = () => {
   }, [isApiFetching, isRefreshing]);
 
   // ==========================================
-  // SCROLL HANDLER
-  // When user reaches top (y <= 50), increase limit
+  // SCROLL HANDLER (inverted FlatList)
   // ==========================================
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      if (isAdjustingScroll.current || isLoadingMore) return;
+      if (isPaginating.current || isLoadingMore) return;
 
-      const {contentOffset, contentSize} = event.nativeEvent;
+      const {contentOffset, contentSize, layoutMeasurement} = event.nativeEvent;
+      const distanceFromTop =
+        contentSize.height - layoutMeasurement.height - contentOffset.y;
 
-      if (contentOffset.y <= 50 && hasMore && !isApiFetching && !isRefreshing) {
-        isAdjustingScroll.current = true;
-        prevScrollHeight.current = contentSize.height;
+      if (distanceFromTop <= 50 && hasMore && !isApiFetching && !isRefreshing) {
+        isPaginating.current = true;
         setIsLoadingMore(true);
         setLimit(prev => prev + 20);
       }
@@ -380,44 +382,7 @@ const SupportChat = () => {
   );
 
   // ==========================================
-  // CONTENT SIZE CHANGE
-  // After new data loads, list gets taller at the top.
-  // Scroll down by that exact amount so user stays at same message.
-  // ==========================================
-  const handleContentSizeChange = useCallback(
-    (_width: number, newHeight: number) => {
-      if (isAdjustingScroll.current && prevScrollHeight.current > 0) {
-        const heightDiff = newHeight - prevScrollHeight.current;
-
-        if (heightDiff > 0) {
-          setTimeout(() => {
-            flatListRef.current?.scrollToOffset({
-              offset: heightDiff,
-              animated: false,
-            });
-            isAdjustingScroll.current = false;
-            prevScrollHeight.current = 0;
-            setIsLoadingMore(false);
-          }, 50);
-        } else {
-          isAdjustingScroll.current = false;
-          prevScrollHeight.current = 0;
-          setIsLoadingMore(false);
-        }
-      } else if (isInitialLoad.current && newHeight > 0) {
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({animated: false});
-          isInitialLoad.current = false;
-        }, 100);
-      }
-    },
-    [],
-  );
-
-  // ==========================================
-  // PROCESS API DATA
-  // API returns newest-first → reverse to oldest-first
-  // Keep temp messages (optimistic UI) at the bottom
+  // FIX #2: SMART MERGE LOGIC
   // ==========================================
   useEffect(() => {
     if (!messagesData?.data?.messages) return;
@@ -425,17 +390,35 @@ const SupportChat = () => {
     const apiMessages = messagesData.data.messages;
 
     setMessages(prev => {
-      const apiIds = new Set(apiMessages.map(m => m.id));
-      // Keep only local temp messages (id is a timestamp like 1721545678901)
-      const localOnlyMessages = prev.filter(
-        m => !apiIds.has(m.id) && m.id > 1000000000000,
+      const tempMessages = prev.filter(m => m.id > 1000000000000);
+
+      if (isPaginating.current) {
+        isPaginating.current = false;
+        const prevIds = new Set(prev.map(m => m.id));
+        const newOlderMessages = apiMessages.filter(m => !prevIds.has(m.id));
+        if (newOlderMessages.length === 0) return prev;
+
+        return [...prev, ...newOlderMessages];
+      }
+
+      const newestApiTime =
+        apiMessages.length > 0
+          ? new Date(apiMessages[0].created_at).getTime()
+          : 0;
+
+      const newerLocalMessages = prev.filter(
+        m =>
+          m.id <= 1000000000000 &&
+          new Date(m.created_at).getTime() > newestApiTime &&
+          !apiMessages.some(a => a.id === m.id),
       );
 
-      // API returns newest first (345, 344, 343...)
-      // Reverse so oldest is at index 0 (top of screen)
-      const reversed = [...apiMessages].reverse();
+      const combined = [...newerLocalMessages, ...tempMessages, ...apiMessages];
 
-      return [...reversed, ...localOnlyMessages];
+      return combined.sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
     });
 
     setIsLoadingMore(false);
@@ -457,29 +440,17 @@ const SupportChat = () => {
       }
     });
 
-    setMessages(prev => {
-      const prevIds = new Set(prev.map(m => m.id));
-      let updated = [...prev];
-
-      incomingSocketMsgs.forEach(socketMsg => {
-        if (prevIds.has(socketMsg.id)) {
-          updated = updated.map(m =>
-            m.id === socketMsg.id ? {...m, status: socketMsg.status} : m,
-          );
-        } else if (socketMsg.sender_type !== senderType) {
-          updated.push(socketMsg);
-          processedSocketIdsRef.current.add(socketMsg.id);
-        }
-      });
-
-      return updated.sort(
-        (a, b) =>
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-      );
-    });
-
     if (newMsgsFromOthers.length > 0) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({animated: true}), 100);
+      setMessages(prev => {
+        const prevIds = new Set(prev.map(m => m.id));
+        const toAdd = newMsgsFromOthers.filter(m => !prevIds.has(m.id));
+        if (toAdd.length === 0) return prev;
+        toAdd.forEach(m => processedSocketIdsRef.current.add(m.id));
+        return [...toAdd, ...prev].sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
+      });
 
       if (conversationId) {
         handleMarkAsRead(newMsgsFromOthers.map(m => m.id));
@@ -515,10 +486,6 @@ const SupportChat = () => {
     }
   }, [socketMessages, senderType, conversationId, handleMarkAsRead]);
 
-  const scrollToBottom = () => {
-    setTimeout(() => flatListRef.current?.scrollToEnd({animated: true}), 150);
-  };
-
   const handleSend = async (text: string) => {
     const trimmedText = text.trim();
     if (!trimmedText && !uploadedUrl) return;
@@ -543,8 +510,7 @@ const SupportChat = () => {
       created_at: new Date().toISOString(),
     };
 
-    setMessages(prev => [...prev, tempMessage]);
-    scrollToBottom();
+    setMessages(prev => [tempMessage, ...prev]);
 
     const payload: any = {
       conversation_id: conversationId,
@@ -828,15 +794,12 @@ const SupportChat = () => {
   const handlePickMedia = () =>
     pickMedia({mediaType: 'mixed', selectionLimit: 1});
 
-  // Pull to refresh: reset limit back to 20 and invalidate cache
   const onRefresh = useCallback(() => {
     setIsRefreshing(true);
+    setMessages([]);
     setLimit(20);
-    isInitialLoad.current = true;
-    isAdjustingScroll.current = false;
-    prevScrollHeight.current = 0;
+    isPaginating.current = false;
     setIsLoadingMore(false);
-    // Clear the RTK Query cache for this conversation so it fetches fresh
     if (conversationId) {
       store.dispatch(
         supportChatSlice.util.invalidateTags([
@@ -860,9 +823,11 @@ const SupportChat = () => {
       />
       <KeyboardAvoidingView
         style={{flex: 1}}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}>
         <FlatList
           ref={flatListRef}
+          key={conversationId}
+          inverted
           data={messages}
           keyExtractor={(item, i) => String(item.id ?? i)}
           renderItem={renderMessage}
@@ -873,10 +838,9 @@ const SupportChat = () => {
           ]}
           onScroll={handleScroll}
           scrollEventThrottle={16}
-          onContentSizeChange={handleContentSizeChange}
           refreshing={isRefreshing}
           onRefresh={onRefresh}
-          ListHeaderComponent={
+          ListFooterComponent={
             isLoadingMore ? (
               <ActivityIndicator
                 style={styles.loader}
@@ -900,7 +864,7 @@ const SupportChat = () => {
           }
         />
 
-        <View style={{paddingBottom: 18}}>
+        <View style={{paddingBottom: Platform.OS === 'ios' ? 18 : 10}}>
           <ChatInput
             showInputIcon={true}
             onPress={handleSend}

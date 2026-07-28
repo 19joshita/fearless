@@ -141,6 +141,7 @@ const SignUp: FC = () => {
           <AppTextInput
             placeholder={TEXT.ENTER_YOUR_EMAIL}
             leftIcon={<ICON_EMAIL />}
+            autoComplete="email"
             input={formik.values.emailAddress}
             setInput={formik.handleChange('emailAddress')}
             isError={formik?.errors?.emailAddress}

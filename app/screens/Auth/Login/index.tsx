@@ -113,6 +113,7 @@ const Login: FC = () => {
               formik.validateField('emailAddress');
             }
           }}
+          autoComplete="email"
           isError={formik?.errors?.emailAddress}
         />
         <AppTextInput
@@ -129,6 +130,7 @@ const Login: FC = () => {
               formik.validateField('password');
             }
           }}
+          autoComplete="current-password"
           isError={formik.errors.password}
           onRightIconPress={handleShowHidePassword}
         />
