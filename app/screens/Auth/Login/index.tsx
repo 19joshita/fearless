@@ -51,17 +51,13 @@ const Login: FC = () => {
         // 1. Save Tokens and IDs
         setPrefsValue(STORAGE.TOKEN, response?.token);
         setPrefsValue(STORAGE.USER_ID, response?.data?.uuid);
-
         // 2. SAVE USER DATA (Crucial for notification tap handling)
         setPrefsValue(STORAGE.USER_DATA, JSON.stringify(response?.data));
-
         // 3. Update Redux
         dispatch(setIsLogin(true));
         dispatch(setUserInfo(response?.data));
-
         // Note: RootNavigation will handle generating the NEW FCM token
         // as soon as isLogin turns to true.
-
         Toast.show({type: 'success', text1: TEXT.LOGIN_SUCCESS});
       } else {
         Alert.alert('Error', response?.error);

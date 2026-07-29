@@ -13,10 +13,12 @@ import {
   Pressable,
   NativeSyntheticEvent,
   NativeScrollEvent,
-  KeyboardAvoidingView,
   Platform,
   Keyboard,
 } from 'react-native';
+
+// ADDED: Reanimated imports for fakeView keyboard handling
+import Animated, {useAnimatedStyle} from 'react-native-reanimated';
 
 import Video, {VideoRef} from 'react-native-video';
 import {AppView, ChatHeader, ChatInput} from '@components';
@@ -45,6 +47,7 @@ import {
 
 import type {Message} from 'types/support-chat';
 import {AppImage} from '@global-components';
+// These are already in your file and are required for the fakeView logic
 import useKeyboardAnimation from './../../Home/Chat/UseKeyboardAnimation';
 import useIsTabScreen from './../../Home/Chat/useIsTabScreen';
 import {useAudioRecorder, useGalleryPicker} from '@redux/useChatMedia';
@@ -117,7 +120,7 @@ const SupportChat = () => {
   const [deleteSupportMessage] = useDeleteMessageMutation();
   const [markMessagesAsRead] = useMarkMessagesAsReadMutation();
   const [isRefreshing, setIsRefreshing] = useState(false);
-
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const {
     audioPath,
     isRecording,
@@ -159,7 +162,6 @@ const SupportChat = () => {
   const [isModalVideoLoading, setIsModalVideoLoading] = useState(false);
   const audioPlayerRef = useRef<VideoRef>(null);
 
-  // FIX: Removed readMessageIds and deliveredMessageIds to match hook signature
   const {messages: socketMessages, presenceMap} = useSupportChatSocket(
     conversationId ?? null,
   );
@@ -230,9 +232,6 @@ const SupportChat = () => {
     [conversationId, markMessagesAsRead, senderType],
   );
 
-  // ==========================================
-  // FIX: Force refetch on focus for notifications
-  // ==========================================
   useFocusEffect(
     useCallback(() => {
       if (conversationId) {
@@ -263,7 +262,6 @@ const SupportChat = () => {
     }
   }, [messagesData, conversationId, senderType, handleMarkAsRead]);
 
-  // Reset everything when conversation changes
   useEffect(() => {
     processedSocketIdsRef.current = new Set();
     setMessages([]);
@@ -361,9 +359,6 @@ const SupportChat = () => {
     }
   }, [isApiFetching, isRefreshing]);
 
-  // ==========================================
-  // SCROLL HANDLER (inverted FlatList)
-  // ==========================================
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       if (isPaginating.current || isLoadingMore) return;
@@ -381,9 +376,6 @@ const SupportChat = () => {
     [hasMore, isApiFetching, isRefreshing, isLoadingMore],
   );
 
-  // ==========================================
-  // FIX #2: SMART MERGE LOGIC
-  // ==========================================
   useEffect(() => {
     if (!messagesData?.data?.messages) return;
 
@@ -424,7 +416,6 @@ const SupportChat = () => {
     setIsLoadingMore(false);
   }, [messagesData]);
 
-  // Socket message handling
   useEffect(() => {
     if (!socketMessages || socketMessages.length === 0) return;
 
@@ -562,7 +553,30 @@ const SupportChat = () => {
     setMediaModal(null);
     setIsModalVideoLoading(false);
   };
+  useEffect(() => {
+    if (Platform.OS !== 'ios') {
+      return;
+    }
 
+    const showListener = Keyboard.addListener(
+      'keyboardWillChangeFrame',
+      event => {
+        const height =
+          Dimensions.get('screen').height - event.endCoordinates.screenY;
+
+        setKeyboardHeight(Math.max(height, 0));
+      },
+    );
+
+    const hideListener = Keyboard.addListener('keyboardWillHide', () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, []);
   const renderMessage = ({item}: {item: Message}) => {
     const isMe = item.sender_type === senderType;
     const isDeleted = deletedIds.has(item.id);
@@ -809,6 +823,20 @@ const SupportChat = () => {
     }
   }, [conversationId]);
 
+  // ==========================================
+  // KEYBOARD HANDLING (Exact same logic from Chat.tsx)
+  // ==========================================
+  const {height} = useKeyboardAnimation();
+  const isTabScreen = useIsTabScreen();
+  const tabBarHeight = isTabScreen ? scaleSize(70) : 0;
+  const fakeView = useAnimatedStyle(() => {
+    const computedValue = height.value;
+    return {
+      height: Math.max(0, Math.abs(computedValue) - tabBarHeight - bottom),
+      marginBottom: isTabScreen ? 0 : bottom + 20,
+    };
+  }, [bottom, tabBarHeight]);
+
   return (
     <AppView customViewStyle={styles.screen}>
       <ChatHeader
@@ -821,65 +849,65 @@ const SupportChat = () => {
         status={isOtherUserOnline ? 'online' : undefined}
         onlayout={() => {}}
       />
-      <KeyboardAvoidingView
-        style={{flex: 1}}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}>
-        <FlatList
-          ref={flatListRef}
-          key={conversationId}
-          inverted
-          data={messages}
-          keyExtractor={(item, i) => String(item.id ?? i)}
-          renderItem={renderMessage}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.listContent,
-            messages.length === 0 ? {justifyContent: 'center'} : undefined,
-          ]}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-          refreshing={isRefreshing}
-          onRefresh={onRefresh}
-          ListFooterComponent={
-            isLoadingMore ? (
-              <ActivityIndicator
-                style={styles.loader}
-                size="small"
-                color={COLORS.SECONDARY_COLOR}
-              />
-            ) : !hasMore && messages.length > 0 ? (
-              <View style={styles.noMoreContainer}>
-                <Text style={styles.noMoreText}>No more messages</Text>
-              </View>
-            ) : null
-          }
-          ListEmptyComponent={
-            !isApiFetching && !isRefreshing ? (
-              <View style={styles.empty}>
-                <Text style={styles.emptyText}>
-                  No messages yet. Say hello!
-                </Text>
-              </View>
-            ) : null
-          }
+
+      {/* REMOVED KeyboardAvoidingView, using FlatList directly like Chat.tsx */}
+      <FlatList
+        ref={flatListRef}
+        key={conversationId}
+        inverted
+        data={messages}
+        keyExtractor={(item, i) => String(item.id ?? i)}
+        renderItem={renderMessage}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingBottom: Platform.OS === 'ios' ? keyboardHeight + 80 : 80,
+        }}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        refreshing={isRefreshing}
+        onRefresh={onRefresh}
+        ListFooterComponent={
+          isLoadingMore ? (
+            <ActivityIndicator
+              style={styles.loader}
+              size="small"
+              color={COLORS.SECONDARY_COLOR}
+            />
+          ) : !hasMore && messages.length > 0 ? (
+            <View style={styles.noMoreContainer}>
+              <Text style={styles.noMoreText}>No more messages</Text>
+            </View>
+          ) : null
+        }
+        ListEmptyComponent={
+          !isApiFetching && !isRefreshing ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>No messages yet. Say hello!</Text>
+            </View>
+          ) : null
+        }
+      />
+
+      <View
+        style={{
+          paddingBottom: Platform.OS === 'ios' ? keyboardHeight - 10 : 0,
+        }}>
+        <ChatInput
+          showInputIcon
+          onPress={handleSend}
+          showImage
+          openGallery={handlePickMedia}
+          handleAudio={handleToggleRecording}
+          uploadedUrl={uploadedUrl}
+          uploadedType={uploadedType}
+          isUploading={isUploading}
+          isRecording={isRecording}
+          onRemoveMedia={handleRemoveMedia}
         />
+      </View>
 
-        <View style={{paddingBottom: Platform.OS === 'ios' ? 18 : 10}}>
-          <ChatInput
-            showInputIcon={true}
-            onPress={handleSend}
-            showImage={true}
-            openGallery={handlePickMedia}
-            handleAudio={handleToggleRecording}
-            uploadedUrl={uploadedUrl}
-            uploadedType={uploadedType}
-            isUploading={isUploading}
-            isRecording={isRecording}
-            onRemoveMedia={handleRemoveMedia}
-          />
-        </View>
-      </KeyboardAvoidingView>
-
+      {/* ADDED: fakeView to handle keyboard push smoothly */}
+      {Platform.OS === 'android' && <Animated.View style={fakeView} />}
       <Modal
         visible={!!mediaModal}
         transparent

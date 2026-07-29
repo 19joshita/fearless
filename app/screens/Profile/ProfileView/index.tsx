@@ -34,10 +34,6 @@ const ProfileView: FC = () => {
   const logout = async () => {
     try {
       // ==========================================
-      // 1. EXPIRE/DELETE FCM TOKEN IMMEDIATELY
-      // This makes the old token physically useless. 
-      // Android can no longer show background notifications for User A.
-      // ==========================================
       try {
         await messaging().deleteToken();
         console.log('✅ FCM Token Destroyed');
@@ -49,7 +45,7 @@ const ProfileView: FC = () => {
       setPrefsValue(STORAGE.FCM_TOKEN, '');
       setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, '');
       setPrefsValue(STORAGE.REGISTERED_USER_ID, '');
-      
+
       // Clear any visible notifications from the tray instantly
       await notifee.cancelAllNotifications();
 
@@ -57,15 +53,14 @@ const ProfileView: FC = () => {
       // 2. NORMAL LOGOUT STUFF
       // ==========================================
       triggerLogout(null).unwrap().catch(console.error);
-      
+
       dispatch(setIsLogin(false));
       dispatch(setUserInfo(undefined)); // Use undefined based on your slice
-      
+
       setPrefsValue(STORAGE.TOKEN, '');
       setPrefsValue(STORAGE.USER_ID, '');
       setPrefsValue(STORAGE.ISLOGGED, '');
       setPrefsValue(STORAGE.USER_DATA, '');
-
     } catch (e) {
       console.log('Logout error', e);
     }
@@ -95,12 +90,19 @@ const ProfileView: FC = () => {
         data={profileMenu}
         keyExtractor={(_, index) => index.toString()}
         renderItem={({item}) => (
-          <ProfileMenu title={item.title} icon={item.icon} onPress={item.onPress} />
+          <ProfileMenu
+            title={item.title}
+            icon={item.icon}
+            onPress={item.onPress}
+          />
         )}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{gap: SPACING.m, paddingBottom: SPACING.s}}
         ListFooterComponent={
-          <AppButton text={TEXT.LOG_OUT} onHandlePress={() => setIsLogout(true)} />
+          <AppButton
+            text={TEXT.LOG_OUT}
+            onHandlePress={() => setIsLogout(true)}
+          />
         }
       />
       <AppConfirmationModal

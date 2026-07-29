@@ -20,6 +20,8 @@ import {AppImage} from '@global-components';
 import {useAppSelector} from '@redux/reduxHook';
 import {useText} from '@localization';
 import Video from 'react-native-video';
+// ADDED: Import safe area to handle bottom insets universally
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 interface ChatInputProps {
   onPress: (text: string) => void;
@@ -57,6 +59,10 @@ const ChatInput = ({
 }: ChatInputProps) => {
   const {TEXT} = useText();
   const Profile = useAppSelector(state => state.app?.userInfo);
+  
+  // UNIVERSAL FIX: Get safe area bottom inset right inside the component
+  const {bottom} = useSafeAreaInsets();
+  
   const [text, setText] = useState<string>('');
   const [isAudioPlaying, setIsAudioPlaying] = useState<boolean>(false);
 
@@ -64,7 +70,6 @@ const ChatInput = ({
   const isSendDisabled = isDisabled || (!hasText && !uploadedUrl);
   const isMediaDisabled = isUploading || isRecording;
 
-  // Stop audio playback if the uploaded media is removed
   useEffect(() => {
     if (!uploadedUrl) {
       setIsAudioPlaying(false);
@@ -82,7 +87,8 @@ const ChatInput = ({
   };
 
   return (
-    <View style={styles.container}>
+    // UNIVERSAL FIX: Apply the dynamic bottom inset directly to the container
+    <View style={[styles.container, {paddingBottom: bottom}]}>
       {showImage && (
         <AppImage imageContainerStyle={styles.avatar} uri={Profile?.image} />
       )}
@@ -96,7 +102,6 @@ const ChatInput = ({
             <View style={styles.recordingContainer}>
               <View style={styles.recordingDot} />
               <Text style={styles.recordingText}>Recording...</Text>
-              {/* Stop button calls handleAudio which triggers stopRecording in parent */}
               <TouchableOpacity onPress={handleAudio}>
                 <ICON_CLOSE width={scaleSize(18)} height={scaleSize(18)} />
               </TouchableOpacity>
@@ -149,7 +154,6 @@ const ChatInput = ({
                 </TouchableOpacity>
               )}
 
-              {/* Hidden Video component to actually play the audio (prevents TS errors) */}
               {!isUploading && uploadedUrl && (
                 <Video
                   source={{uri: uploadedUrl}}
@@ -273,7 +277,9 @@ const ChatInput = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: scaleSize(10),
+    marginTop: scaleSize(10),
+    // Removed static marginVertical to prevent double-padding. 
+    // paddingBottom is now injected dynamically via props in the component.
     flexDirection: 'row' as const,
     alignItems: 'flex-end' as const,
     gap: scaleSize(8),

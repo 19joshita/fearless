@@ -109,7 +109,7 @@ const Chat = () => {
   ] = useLazyExportChatQuery();
   const [downloadingFile, setDownloadingFile] = useState<boolean>(false);
   const Profile = useAppSelector(state => state?.app?.userInfo);
-  console.log("Profile===>",Profile)
+  console.log('Profile===>', Profile);
   const isConnected = useAppSelector(state => state?.app?.isInternetConnected);
 
   const [triggerCreateChatRoom, {isLoading: createRoomLoading}] =
@@ -768,7 +768,7 @@ const Chat = () => {
 
   const handleDeleteChat = async () => {
     try {
-      const response = await deleteChat(chatRoomId).unwrap(); 
+      const response = await deleteChat(chatRoomId).unwrap();
       if (response?.success) {
         Toast.show({
           text1: response?.message,
