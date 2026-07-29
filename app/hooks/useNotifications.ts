@@ -39,17 +39,20 @@ const useNotifications = () => {
           setPrefsValue(STORAGE.FCM_TOKEN, token);
         }
       }
-
       await checkInitialNotification();
-
       unsub1 = messaging().onMessage(onForegroundMessage);
-
       unsub2 = messaging().onNotificationOpenedApp(remoteMessage => {
+        const isLogin = store.getState().app.isLogin;
+        if (!isLogin) return;
+
         handleNotification(remoteMessage.data);
       });
 
       unsub3 = notifee.onForegroundEvent(({type, detail}) => {
         if (type === EventType.PRESS) {
+          const isLogin = store.getState().app.isLogin;
+          if (!isLogin) return;
+
           handleNotification(
             detail.notification?.data as NotificationData | undefined,
           );
@@ -57,6 +60,8 @@ const useNotifications = () => {
       });
 
       unsub4 = messaging().onTokenRefresh(async token => {
+        const isLogin = store.getState().app.isLogin;
+        if (!isLogin) return;
         setPrefsValue(STORAGE.FCM_TOKEN, token);
         setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, '');
       });
@@ -114,6 +119,12 @@ async function checkInitialNotification() {
 async function onForegroundMessage(
   remoteMessage: FirebaseMessagingTypes.RemoteMessage,
 ) {
+  const isLogin = store.getState().app.isLogin;
+  if (!isLogin) {
+    console.log('🔥 Notification blocked - User is logged out');
+    return;
+  }
+
   const currentRoute: any = navigationRef?.getCurrentRoute();
 
   const isOnThisExactChat =
@@ -151,6 +162,9 @@ async function onForegroundMessage(
 export function handleNotification(data?: any) {
   if (!data) return;
 
+  const isLogin = store.getState().app.isLogin;
+  if (!isLogin) return;
+
   if (data?.type === 'support_chat' && data?.conversationId) {
     const Profile = store.getState()?.app?.userInfo;
 
@@ -187,3 +201,22 @@ export function handleNotification(data?: any) {
     }, 300);
   }
 }
+
+// ✅ NEW: Add this function to properly logout and delete token
+export const logoutAndDeleteToken = async () => {
+  try {
+    // 1. Actually DELETE the FCM token from Firebase
+    await messaging().deleteToken();
+    console.log('🔑 FCM Token deleted successfully');
+  } catch (error) {
+    console.error('Failed to delete FCM token:', error);
+  }
+
+  // 2. Clear all notification-related storage
+  setPrefsValue(STORAGE.FCM_TOKEN, '');
+  setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, '');
+  setPrefsValue(STORAGE.REGISTERED_USER_ID, '');
+
+  // 3. Cancel all pending notifications
+  await notifee.cancelAllNotifications();
+};

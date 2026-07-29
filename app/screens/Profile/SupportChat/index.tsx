@@ -116,7 +116,13 @@ const MessageStatusTick = ({status}: {status?: string | null}) => {
 
 const SupportChat = () => {
   const route = useRoute<RouteProps>();
-  const {selectedMedia, pickMedia, reset: resetGallery} = useGalleryPicker();
+  const {
+    selectedMedia,
+    pickMedia,
+    capturePhoto,
+    captureVideo,
+    reset: resetGallery,
+  } = useGalleryPicker();
   const [deleteSupportMessage] = useDeleteMessageMutation();
   const [markMessagesAsRead] = useMarkMessagesAsReadMutation();
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -298,19 +304,31 @@ const SupportChat = () => {
 
   const handleUploadFile = useCallback(
     async (uri: string, type: string, name: string): Promise<string | null> => {
-      if (!uri) return null;
+      if (!uri) {
+        console.log('No URI provided for upload');
+        return null;
+      }
+      console.log('Starting upload:', {uri, type, name});
+
       const formData = new FormData();
       formData.append('file', {
         uri,
         type,
         name: name || 'media',
       } as unknown as Blob);
+
       try {
         const response = await uploadFile(formData).unwrap();
+        console.log('Upload successful:', response);
         setUploadedUrl(response.url);
         return response.url;
-      } catch (error) {
-        Toast.show({type: 'error', text1: 'Failed to upload file'});
+      } catch (error: any) {
+        console.error('Upload failed:', error);
+        Toast.show({
+          type: 'error',
+          text1: 'Failed to upload file',
+          text2: error?.data?.message || 'Please try again',
+        });
         setUploadedType(null);
         setUploadedDuration(null);
         return null;
@@ -327,17 +345,50 @@ const SupportChat = () => {
 
   useEffect(() => {
     if (!selectedMedia) return;
+
     const media = Array.isArray(selectedMedia)
       ? selectedMedia[0]
       : selectedMedia;
-    if (!media?.uri) return;
+
+    if (!media?.uri) {
+      console.log('No media URI found');
+      return;
+    }
+
+    console.log('Processing selected media:', media);
+
     const mimeType = media.type ?? 'image/jpeg';
     const fileName =
       media.fileName ?? `media.${mimeType.split('/')[1] ?? 'jpg'}`;
-    setUploadedType(mimeType.startsWith('video/') ? 'video' : 'image');
-    setUploadedDuration(
-      media.duration ? Math.round(media.duration / 1000) : null,
-    );
+
+    // Determine if it's video, image, or audio
+    let mediaType: 'video' | 'image' | 'audio' = 'image';
+    if (mimeType.startsWith('video/')) {
+      mediaType = 'video';
+    } else if (mimeType.startsWith('audio/')) {
+      mediaType = 'audio';
+    }
+
+    setUploadedType(mediaType);
+
+    // Handle duration - iOS returns duration in seconds, sometimes as decimal
+    const duration = media.duration
+      ? media.duration > 1000
+        ? Math.round(media.duration / 1000) 
+        : Math.round(media.duration) 
+      : null;
+
+    setUploadedDuration(duration);
+
+    console.log('Uploading:', {
+      uri: media.uri,
+      type: mimeType,
+      fileName,
+      mediaType,
+      duration,
+      fileSize: media.fileSize,
+    });
+
     handleUploadFile(media.uri, mimeType, fileName);
     resetGallery();
   }, [selectedMedia, handleUploadFile, resetGallery]);
@@ -808,6 +859,10 @@ const SupportChat = () => {
   const handlePickMedia = () =>
     pickMedia({mediaType: 'mixed', selectionLimit: 1});
 
+  const handleCapturePhoto = () => capturePhoto();
+
+  const handleCaptureVideo = () => captureVideo();
+
   const onRefresh = useCallback(() => {
     setIsRefreshing(true);
     setMessages([]);
@@ -897,6 +952,8 @@ const SupportChat = () => {
           onPress={handleSend}
           showImage
           openGallery={handlePickMedia}
+          capturePhoto={handleCapturePhoto}
+          captureVideo={handleCaptureVideo}
           handleAudio={handleToggleRecording}
           uploadedUrl={uploadedUrl}
           uploadedType={uploadedType}

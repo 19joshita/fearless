@@ -240,5 +240,5 @@ export default {
   FAILED_TO_DELETE_MESSAGE: 'Failed to delete message',
   LOGIN_SUCCESS: 'You have successfully logged in.',
   SIGNUP_SUCCESS: 'Your account has been created successfully.',
-
+  OTP_SENT_SUCCESS: 'A verification code has been sent to your email address.',
 };

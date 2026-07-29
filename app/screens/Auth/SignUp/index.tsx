@@ -57,7 +57,7 @@ const SignUp: FC = () => {
       email: formik.values.emailAddress,
       password: formik.values.password,
     }).unwrap();
-
+    console.log(response, 'response');
     if (response?.success) {
       navigate(RouteNames.OTP_VERIFICATION, {
         token: response?.token,

@@ -2,11 +2,13 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   launchImageLibrary,
+  launchCamera,
   ImageLibraryOptions,
+  CameraOptions,
   Asset,
 } from 'react-native-image-picker';
 import AudioRecord from 'react-native-audio-record';
-import { Platform, PermissionsAndroid } from 'react-native';
+import { Platform, PermissionsAndroid, Alert } from 'react-native';
 
 // ==================== GALLERY PICKER TYPES ====================
 interface SelectedMedia {
@@ -24,6 +26,8 @@ interface UseGalleryPickerReturn {
   loading: boolean;
   error: string | null;
   pickMedia: (options?: Partial<ImageLibraryOptions>) => void;
+  capturePhoto: () => void;
+  captureVideo: () => void;
   reset: () => void;
 }
 
@@ -62,7 +66,7 @@ export const useGalleryPicker = (): UseGalleryPickerReturn => {
 
       const defaultOptions: ImageLibraryOptions = {
         mediaType: 'mixed',
-        selectionLimit: 0,
+        selectionLimit: 1, // Fix: Changed from 0 to 1 for single selection
         videoQuality: 'high',
         quality: 0.8,
         includeBase64: false,
@@ -70,13 +74,17 @@ export const useGalleryPicker = (): UseGalleryPickerReturn => {
       };
 
       launchImageLibrary(defaultOptions, response => {
+        console.log('Gallery Response:', response);
+
         if (response.didCancel) {
-          setError('User cancelled');
+          console.log('User cancelled gallery picker');
           setLoading(false);
           return;
         }
 
         if (response.errorCode) {
+          console.error('Gallery Error:', response.errorCode, response.errorMessage);
+          Alert.alert('Error', response.errorMessage || 'Failed to pick media');
           setError(response.errorMessage ?? 'Unknown error');
           setLoading(false);
           return;
@@ -95,6 +103,7 @@ export const useGalleryPicker = (): UseGalleryPickerReturn => {
             }),
           );
 
+          console.log('Selected Media:', mediaData);
           setSelectedMedia(mediaData.length === 1 ? mediaData[0] : mediaData);
         }
 
@@ -103,6 +112,153 @@ export const useGalleryPicker = (): UseGalleryPickerReturn => {
     },
     [],
   );
+
+  const capturePhoto = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    // Request camera permission on Android
+    if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.CAMERA,
+          {
+            title: 'Camera Permission',
+            message: 'This app needs access to your camera to take photos.',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          },
+        );
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          console.log('Camera permission denied');
+          Alert.alert('Permission Denied', 'Camera permission is required to take photos.');
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn('Permission error:', err);
+        setLoading(false);
+        return;
+      }
+    }
+
+    const cameraOptions: CameraOptions = {
+      mediaType: 'photo',
+      quality: 0.8,
+      includeBase64: false,
+      saveToPhotos: false,
+      cameraType: 'back',
+    };
+
+    launchCamera(cameraOptions, response => {
+      console.log('Camera Photo Response:', response);
+
+      if (response.didCancel) {
+        console.log('User cancelled camera');
+        setLoading(false);
+        return;
+      }
+
+      if (response.errorCode) {
+        console.error('Camera Error:', response.errorCode, response.errorMessage);
+        Alert.alert('Camera Error', response.errorMessage || 'Failed to open camera');
+        setError(response.errorMessage ?? 'Unknown error');
+        setLoading(false);
+        return;
+      }
+
+      if (response.assets && response.assets.length > 0) {
+        const asset = response.assets[0];
+        const mediaData: SelectedMedia = {
+          uri: asset.uri,
+          type: asset.type,
+          fileName: asset.fileName,
+          fileSize: asset.fileSize,
+          width: asset.width,
+          height: asset.height,
+          duration: asset.duration,
+        };
+        console.log('Captured Photo:', mediaData);
+        setSelectedMedia(mediaData);
+      }
+
+      setLoading(false);
+    });
+  }, []);
+
+  const captureVideo = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    // Request camera and microphone permissions on Android
+    if (Platform.OS === 'android') {
+      try {
+        const permissions = await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.CAMERA,
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        ]);
+
+        if (
+          permissions['android.permission.CAMERA'] !== PermissionsAndroid.RESULTS.GRANTED ||
+          permissions['android.permission.RECORD_AUDIO'] !== PermissionsAndroid.RESULTS.GRANTED
+        ) {
+          console.log('Camera or microphone permission denied');
+          Alert.alert('Permission Denied', 'Camera and microphone permissions are required to record videos.');
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn('Permission error:', err);
+        setLoading(false);
+        return;
+      }
+    }
+
+    const cameraOptions: CameraOptions = {
+      mediaType: 'video',
+      videoQuality: 'high',
+      includeBase64: false,
+      saveToPhotos: false,
+      cameraType: 'back',
+      durationLimit: 300, // 5 minutes max
+    };
+
+    launchCamera(cameraOptions, response => {
+      console.log('Camera Video Response:', response);
+
+      if (response.didCancel) {
+        console.log('User cancelled video recording');
+        setLoading(false);
+        return;
+      }
+
+      if (response.errorCode) {
+        console.error('Camera Video Error:', response.errorCode, response.errorMessage);
+        Alert.alert('Camera Error', response.errorMessage || 'Failed to record video');
+        setError(response.errorMessage ?? 'Unknown error');
+        setLoading(false);
+        return;
+      }
+
+      if (response.assets && response.assets.length > 0) {
+        const asset = response.assets[0];
+        const mediaData: SelectedMedia = {
+          uri: asset.uri,
+          type: asset.type,
+          fileName: asset.fileName,
+          fileSize: asset.fileSize,
+          width: asset.width,
+          height: asset.height,
+          duration: asset.duration,
+        };
+        console.log('Recorded Video:', mediaData);
+        setSelectedMedia(mediaData);
+      }
+
+      setLoading(false);
+    });
+  }, []);
 
   const reset = useCallback(() => {
     setSelectedMedia(null);
@@ -114,6 +270,8 @@ export const useGalleryPicker = (): UseGalleryPickerReturn => {
     loading,
     error,
     pickMedia,
+    capturePhoto,
+    captureVideo,
     reset,
   };
 };

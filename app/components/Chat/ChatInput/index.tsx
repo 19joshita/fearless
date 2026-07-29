@@ -5,6 +5,10 @@ import {
   Text,
   ActivityIndicator,
   StyleSheet,
+  Platform,
+  ActionSheetIOS,
+  Modal,
+  Pressable,
 } from 'react-native';
 import React, {useState, useEffect} from 'react';
 import {COLORS, FONT_FAMILY, scaleSize} from '@theme';
@@ -28,6 +32,8 @@ interface ChatInputProps {
   isDisabled?: boolean;
   showImage?: boolean;
   openGallery?: () => void;
+  capturePhoto?: () => void;
+  captureVideo?: () => void;
   handleAudio?: () => void;
   startRecording?: () => void;
   stopRecording?: () => void;
@@ -49,6 +55,8 @@ const ChatInput = ({
   isDisabled = false,
   showImage = false,
   openGallery,
+  capturePhoto,
+  captureVideo,
   handleAudio,
   uploadedUrl,
   uploadedType,
@@ -59,12 +67,13 @@ const ChatInput = ({
 }: ChatInputProps) => {
   const {TEXT} = useText();
   const Profile = useAppSelector(state => state.app?.userInfo);
-  
+
   // UNIVERSAL FIX: Get safe area bottom inset right inside the component
   const {bottom} = useSafeAreaInsets();
-  
+
   const [text, setText] = useState<string>('');
   const [isAudioPlaying, setIsAudioPlaying] = useState<boolean>(false);
+  const [showActionSheet, setShowActionSheet] = useState<boolean>(false);
 
   const hasText = text.trim().length > 0;
   const isSendDisabled = isDisabled || (!hasText && !uploadedUrl);
@@ -86,199 +95,304 @@ const ChatInput = ({
     setIsAudioPlaying(prev => !prev);
   };
 
+  const handleMediaAction = () => {
+    if (isMediaDisabled) {
+      return;
+    }
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: [
+            'Cancel',
+            'Take Photo',
+            'Record Video',
+            'Choose from Gallery',
+          ],
+          cancelButtonIndex: 0,
+        },
+        buttonIndex => {
+          if (buttonIndex === 1) {
+            capturePhoto?.();
+          } else if (buttonIndex === 2) {
+            captureVideo?.();
+          } else if (buttonIndex === 3) {
+            openGallery?.();
+          }
+        },
+      );
+    } else {
+      setShowActionSheet(true);
+    }
+  };
+
+  const handleAndroidOption = (option: string) => {
+    setShowActionSheet(false);
+    setTimeout(() => {
+      if (option === 'photo') {
+        capturePhoto?.();
+      } else if (option === 'video') {
+        captureVideo?.();
+      } else if (option === 'gallery') {
+        openGallery?.();
+      }
+    }, 100);
+  };
+
   return (
-    // UNIVERSAL FIX: Apply the dynamic bottom inset directly to the container
-    <View style={[styles.container, {paddingBottom: bottom}]}>
-      {showImage && (
-        <AppImage imageContainerStyle={styles.avatar} uri={Profile?.image} />
-      )}
-      <View style={styles.inputWrapper}>
-        <View style={styles.bubblePointer}>
-          <ICON_INPUT_RADIUS />
-        </View>
-        <View style={styles.bubble}>
-          {/* --- 1. Recording UI --- */}
-          {isRecording ? (
-            <View style={styles.recordingContainer}>
-              <View style={styles.recordingDot} />
-              <Text style={styles.recordingText}>Recording...</Text>
-              <TouchableOpacity onPress={handleAudio}>
-                <ICON_CLOSE width={scaleSize(18)} height={scaleSize(18)} />
-              </TouchableOpacity>
-            </View>
-          ) : uploadedType === 'audio' ? (
-            <View style={styles.audioContainer}>
-              {isUploading ? (
-                <ActivityIndicator
-                  size="small"
-                  color={COLORS.SECONDARY_COLOR}
-                />
-              ) : (
-                <TouchableOpacity
-                  onPress={toggleAudioPlay}
-                  style={styles.playBtn}>
-                  {isAudioPlaying ? (
-                    <ICON_CLOSE width={scaleSize(16)} height={scaleSize(16)} />
-                  ) : (
-                    <ICON_PLAY width={scaleSize(20)} height={scaleSize(20)} />
-                  )}
+    <>
+      <View style={[styles.container, {paddingBottom: bottom}]}>
+        {showImage && (
+          <AppImage imageContainerStyle={styles.avatar} uri={Profile?.image} />
+        )}
+        <View style={styles.inputWrapper}>
+          <View style={styles.bubblePointer}>
+            <ICON_INPUT_RADIUS />
+          </View>
+          <View style={styles.bubble}>
+            {/* --- 1. Recording UI --- */}
+            {isRecording ? (
+              <View style={styles.recordingContainer}>
+                <View style={styles.recordingDot} />
+                <Text style={styles.recordingText}>Recording...</Text>
+                <TouchableOpacity onPress={handleAudio}>
+                  <ICON_CLOSE width={scaleSize(18)} height={scaleSize(18)} />
                 </TouchableOpacity>
-              )}
-              <View style={styles.audioWaveContainer}>
-                <View style={styles.waveform}>
-                  {[...Array(20)].map((_, i) => (
-                    <View
-                      key={i}
-                      style={[
-                        styles.waveBar,
-                        {
-                          height: Math.random() * 16 + 6,
-                          backgroundColor: isAudioPlaying
-                            ? COLORS.SECONDARY_COLOR
-                            : COLORS.GRAY_TEXT_COLOR,
-                        },
-                      ]}
-                    />
-                  ))}
-                </View>
-                <Text style={styles.audioLabel}>
-                  {isUploading ? 'Uploading Audio...' : 'Audio'}
-                </Text>
               </View>
-
-              {!isUploading && (
-                <TouchableOpacity
-                  onPress={onRemoveMedia}
-                  style={styles.closeMediaBtn}>
-                  <ICON_CLOSE width={scaleSize(14)} height={scaleSize(14)} />
-                </TouchableOpacity>
-              )}
-
-              {!isUploading && uploadedUrl && (
-                <Video
-                  source={{uri: uploadedUrl}}
-                  paused={!isAudioPlaying}
-                  repeat={true}
-                  style={styles.hiddenAudioPlayer}
-                />
-              )}
-            </View>
-          ) : (
-            <>
-              {/* Loader while Image/Video is uploading */}
-              {(uploadedType === 'image' || uploadedType === 'video') &&
-              isUploading &&
-              !uploadedUrl ? (
-                <View style={styles.mediaPreviewContainer}>
-                  <View style={styles.loaderPlaceholder}>
-                    <ActivityIndicator
-                      size="small"
-                      color={COLORS.SECONDARY_COLOR}
-                    />
-                    <Text style={styles.uploadingText}>Uploading...</Text>
+            ) : uploadedType === 'audio' ? (
+              <View style={styles.audioContainer}>
+                {isUploading ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={COLORS.SECONDARY_COLOR}
+                  />
+                ) : (
+                  <TouchableOpacity
+                    onPress={toggleAudioPlay}
+                    style={styles.playBtn}>
+                    {isAudioPlaying ? (
+                      <ICON_CLOSE
+                        width={scaleSize(16)}
+                        height={scaleSize(16)}
+                      />
+                    ) : (
+                      <ICON_PLAY width={scaleSize(20)} height={scaleSize(20)} />
+                    )}
+                  </TouchableOpacity>
+                )}
+                <View style={styles.audioWaveContainer}>
+                  <View style={styles.waveform}>
+                    {[...Array(20)].map((_, i) => (
+                      <View
+                        key={i}
+                        style={[
+                          styles.waveBar,
+                          {
+                            height: Math.random() * 16 + 6,
+                            backgroundColor: isAudioPlaying
+                              ? COLORS.SECONDARY_COLOR
+                              : COLORS.GRAY_TEXT_COLOR,
+                          },
+                        ]}
+                      />
+                    ))}
                   </View>
+                  <Text style={styles.audioLabel}>
+                    {isUploading ? 'Uploading Audio...' : 'Audio'}
+                  </Text>
                 </View>
-              ) : null}
 
-              {/* Actual Image/Video Preview after successful upload */}
-              {uploadedUrl &&
-              (uploadedType === 'image' || uploadedType === 'video') ? (
-                <View style={styles.mediaPreviewContainer}>
-                  {uploadedType === 'video' ? (
-                    <Video
-                      source={{uri: uploadedUrl}}
-                      style={styles.mediaPreview}
-                      resizeMode="cover"
-                      paused={true}
-                      muted={true}
-                      repeat={false}
-                    />
-                  ) : (
-                    <AppImage
-                      uri={uploadedUrl}
-                      customStyle={styles.mediaPreview}
-                    />
-                  )}
-
-                  {uploadedType === 'video' && (
-                    <View style={styles.videoPlayOverlay}>
-                      <ICON_PLAY width={scaleSize(16)} height={scaleSize(16)} />
-                    </View>
-                  )}
-
+                {!isUploading && (
                   <TouchableOpacity
                     onPress={onRemoveMedia}
                     style={styles.closeMediaBtn}>
-                    <ICON_CLOSE width={scaleSize(12)} height={scaleSize(12)} />
+                    <ICON_CLOSE width={scaleSize(14)} height={scaleSize(14)} />
                   </TouchableOpacity>
-                </View>
-              ) : null}
+                )}
 
-              <View style={styles.inputRow}>
-                <TextInput
-                  placeholder={TEXT.ASK_A_QUESTION}
-                  placeholderTextColor={COLORS.BODY_TEXT_COLOR}
-                  value={text}
-                  onChangeText={setText}
-                  allowFontScaling={false}
-                  style={[styles.textInput, {color: COLORS.BODY_TEXT_COLOR}]}
-                />
-                {showInputIcon && (
-                  <>
-                    <TouchableOpacity
-                      onPress={openGallery}
-                      style={[
-                        styles.iconBtn,
-                        isMediaDisabled && {opacity: 0.4},
-                      ]}
-                      disabled={isMediaDisabled}>
-                      <ICON_CAMERA
-                        width={scaleSize(20)}
-                        height={scaleSize(20)}
-                      />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={handleAudio}
-                      style={[
-                        styles.iconBtn,
-                        isMediaDisabled && {opacity: 0.4},
-                      ]}
-                      disabled={isMediaDisabled}>
-                      <ICON_MICROPHONE
-                        width={scaleSize(20)}
-                        height={scaleSize(20)}
-                      />
-                    </TouchableOpacity>
-                  </>
+                {!isUploading && uploadedUrl && (
+                  <Video
+                    source={{uri: uploadedUrl}}
+                    paused={!isAudioPlaying}
+                    repeat={true}
+                    style={styles.hiddenAudioPlayer}
+                  />
                 )}
               </View>
-            </>
-          )}
+            ) : (
+              <>
+                {/* Loader while Image/Video is uploading */}
+                {(uploadedType === 'image' || uploadedType === 'video') &&
+                isUploading &&
+                !uploadedUrl ? (
+                  <View style={styles.mediaPreviewContainer}>
+                    <View style={styles.loaderPlaceholder}>
+                      <ActivityIndicator
+                        size="small"
+                        color={COLORS.SECONDARY_COLOR}
+                      />
+                      <Text style={styles.uploadingText}>Uploading...</Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {/* Actual Image/Video Preview after successful upload */}
+                {uploadedUrl &&
+                (uploadedType === 'image' || uploadedType === 'video') ? (
+                  <View style={styles.mediaPreviewContainer}>
+                    {uploadedType === 'video' ? (
+                      <Video
+                        source={{uri: uploadedUrl}}
+                        style={styles.mediaPreview}
+                        resizeMode="cover"
+                        paused={true}
+                        muted={true}
+                        repeat={false}
+                      />
+                    ) : (
+                      <AppImage
+                        uri={uploadedUrl}
+                        customStyle={styles.mediaPreview}
+                      />
+                    )}
+
+                    {uploadedType === 'video' && (
+                      <View style={styles.videoPlayOverlay}>
+                        <ICON_PLAY
+                          width={scaleSize(16)}
+                          height={scaleSize(16)}
+                        />
+                      </View>
+                    )}
+
+                    <TouchableOpacity
+                      onPress={onRemoveMedia}
+                      style={styles.closeMediaBtn}>
+                      <ICON_CLOSE
+                        width={scaleSize(12)}
+                        height={scaleSize(12)}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+
+                <View style={styles.inputRow}>
+                  <TextInput
+                    placeholder={TEXT.ASK_A_QUESTION}
+                    placeholderTextColor={COLORS.BODY_TEXT_COLOR}
+                    value={text}
+                    onChangeText={setText}
+                    allowFontScaling={false}
+                    style={[styles.textInput, {color: COLORS.BODY_TEXT_COLOR}]}
+                  />
+                  {showInputIcon && (
+                    <>
+                      <TouchableOpacity
+                        // onPress={handleMediaAction}
+                        onPress={() => handleAndroidOption('gallery')}
+                        style={[
+                          styles.iconBtn,
+                          isMediaDisabled && {opacity: 0.4},
+                        ]}
+                        disabled={isMediaDisabled}>
+                        <ICON_CAMERA
+                          width={scaleSize(20)}
+                          height={scaleSize(20)}
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={handleAudio}
+                        style={[
+                          styles.iconBtn,
+                          isMediaDisabled && {opacity: 0.4},
+                        ]}
+                        disabled={isMediaDisabled}>
+                        <ICON_MICROPHONE
+                          width={scaleSize(20)}
+                          height={scaleSize(20)}
+                        />
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
+              </>
+            )}
+          </View>
         </View>
+
+        <TouchableOpacity
+          disabled={isSendDisabled}
+          onPress={handleSend}
+          style={[
+            styles.sendBtn,
+            {
+              backgroundColor: isSendDisabled
+                ? COLORS.TABS_BG
+                : COLORS.SECONDARY_COLOR,
+              opacity: isSendDisabled ? 0.5 : 1,
+            },
+          ]}>
+          <ICON_SEND width={scaleSize(16)} height={scaleSize(16)} />
+        </TouchableOpacity>
       </View>
 
-      <TouchableOpacity
-        disabled={isSendDisabled}
-        onPress={handleSend}
-        style={[
-          styles.sendBtn,
-          {
-            backgroundColor: isSendDisabled
-              ? COLORS.TABS_BG
-              : COLORS.SECONDARY_COLOR,
-            opacity: isSendDisabled ? 0.5 : 1,
-          },
-        ]}>
-        <ICON_SEND width={scaleSize(16)} height={scaleSize(16)} />
-      </TouchableOpacity>
-    </View>
+      {/* Android Action Sheet Modal */}
+      {/* {Platform.OS === 'android' && (
+        <Modal
+          visible={showActionSheet}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowActionSheet(false)}>
+          <Pressable
+            style={styles.modalOverlay}
+            onPress={() => setShowActionSheet(false)}>
+            <View style={styles.actionSheetContainer}>
+              <TouchableOpacity
+                style={styles.actionSheetOption}
+                onPress={() => handleAndroidOption('photo')}>
+                <ICON_CAMERA width={scaleSize(24)} height={scaleSize(24)} />
+                <Text style={styles.actionSheetText}>Take Photo</Text>
+              </TouchableOpacity>
+
+              <View style={styles.actionSheetDivider} />
+
+              <TouchableOpacity
+                style={styles.actionSheetOption}
+                onPress={() => handleAndroidOption('video')}>
+                <ICON_CAMERA width={scaleSize(24)} height={scaleSize(24)} />
+                <Text style={styles.actionSheetText}>Record Video</Text>
+              </TouchableOpacity>
+
+              <View style={styles.actionSheetDivider} />
+
+              <TouchableOpacity
+                style={styles.actionSheetOption}
+                onPress={() => handleAndroidOption('gallery')}>
+                <ICON_CAMERA width={scaleSize(24)} height={scaleSize(24)} />
+                <Text style={styles.actionSheetText}>Choose from Gallery</Text>
+              </TouchableOpacity>
+
+              <View style={styles.actionSheetDivider} />
+
+              <TouchableOpacity
+                style={styles.actionSheetOption}
+                onPress={() => setShowActionSheet(false)}>
+                <ICON_CLOSE width={scaleSize(24)} height={scaleSize(24)} />
+                <Text style={[styles.actionSheetText, styles.cancelText]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Modal>
+      )} */}
+    </>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     marginTop: scaleSize(10),
-    // Removed static marginVertical to prevent double-padding. 
+    // Removed static marginVertical to prevent double-padding.
     // paddingBottom is now injected dynamically via props in the component.
     flexDirection: 'row' as const,
     alignItems: 'flex-end' as const,
@@ -430,6 +544,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.BODY_TEXT_COLOR,
     fontFamily: FONT_FAMILY.Medium,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end' as const,
+  },
+  actionSheetContainer: {
+    backgroundColor: COLORS.WHITE_COLOR,
+    borderTopLeftRadius: scaleSize(20),
+    borderTopRightRadius: scaleSize(20),
+    paddingBottom: scaleSize(20),
+  },
+  actionSheetOption: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingVertical: scaleSize(16),
+    paddingHorizontal: scaleSize(20),
+    gap: scaleSize(12),
+  },
+  actionSheetText: {
+    fontSize: scaleSize(16),
+    color: COLORS.BODY_TEXT_COLOR,
+    fontFamily: FONT_FAMILY.Medium,
+  },
+  actionSheetDivider: {
+    height: 1,
+    backgroundColor: COLORS.TABS_BG,
+    marginHorizontal: scaleSize(20),
+  },
+  cancelText: {
+    color: COLORS.BUTTON_BORDER_COLOR,
   },
 });
 

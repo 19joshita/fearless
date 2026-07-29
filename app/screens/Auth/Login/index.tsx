@@ -121,7 +121,6 @@ const Login: FC = () => {
           input={formik.values.password}
           setInput={text => {
             formik.setFieldValue('password', text);
-
             if (formik.errors.password) {
               formik.validateField('password');
             }
@@ -130,6 +129,7 @@ const Login: FC = () => {
           isError={formik.errors.password}
           onRightIconPress={handleShowHidePassword}
         />
+
         <AppLabel
           text={TEXT.FORGOT_YOUR_PASSWORD}
           fontFamily={FONT_FAMILY.Medium}
@@ -144,7 +144,6 @@ const Login: FC = () => {
         onHandlePress={formik?.handleSubmit}
         isLoading={isLoading}
       />
-
       <KeyboardAvoidingView
         style={{flex: 1, alignItems: 'center', justifyContent: 'flex-end'}}>
         <AppLabel
