@@ -2,7 +2,7 @@ import React, {useEffect} from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import DashboardStack from './stacks/DashboardStack';
 import {getPrefsValue, setPrefsValue} from '@utils';
-import {Platform, View, StyleSheet} from 'react-native';
+import {View, StyleSheet} from 'react-native';
 import AuthStack from './stacks/AuthStack';
 import {STORAGE} from '@constants';
 import {useAppDispatch, useAppSelector} from '../redux/reduxHook';
@@ -17,7 +17,7 @@ import useNotifications, {
   clearPendingNotification,
   handleNotification,
 } from '../hooks/useNotifications';
-import {useRegisterDeviceTokenMutation} from '@redux/support-chat-slice';
+// ✅ REMOVED: useRegisterDeviceTokenMutation (No longer needed)
 import {navigationRef} from '@navigation-utils';
 import Toast from 'react-native-toast-message';
 
@@ -26,7 +26,7 @@ const RootNavigation = () => {
   const dispatch = useAppDispatch();
   const {refetch: langRefetch} = useGetLanguagesQuery(null);
   const stored = getPrefsValue(STORAGE.CURRENT_LANGUAGE) as 'en' | 'de';
-  const [registerDeviceToken] = useRegisterDeviceTokenMutation();
+  // ✅ REMOVED: const [registerDeviceToken] = useRegisterDeviceTokenMutation();
 
   // Initialize notification listeners
   useNotifications();
@@ -60,7 +60,9 @@ const RootNavigation = () => {
         dispatch(setIsInternetConnected(state?.isConnected));
       }
     });
-    return () => { unsubscribe(); };
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // HANDLE KILLED STATE NOTIFICATION
@@ -69,60 +71,45 @@ const RootNavigation = () => {
     const pendingData = getPendingNotification();
     if (pendingData) {
       clearPendingNotification();
-      setTimeout(() => { handleNotification(pendingData); }, 800);
+      setTimeout(() => {
+        handleNotification(pendingData);
+      }, 800);
     }
   }, [isLogin]);
 
   // ==========================================
-  // GENERATE NEW TOKEN & REGISTER API
+  // ✅ NEW APPROACH: ENSURE FCM TOKEN EXISTS LOCALLY
   // ==========================================
   useEffect(() => {
     if (!isLogin) return;
 
-    const handleTokenRegistration = async () => {
-      try {
-        let fcmToken = getPrefsValue(STORAGE.FCM_TOKEN);
+    const ensureFcmToken = async () => {
+      let fcmToken = getPrefsValue(STORAGE.FCM_TOKEN);
 
-        // If empty, it means we successfully deleted it on logout!
-        // We MUST get a brand new one now.
-        if (!fcmToken) {
-          console.log('🔑 Old token was deleted. Generating NEW FCM Token...');
+      // If empty, it means we successfully deleted it on logout!
+      // We MUST get a brand new one now.
+      if (!fcmToken) {
+        console.log('🔑 Old token was deleted. Generating NEW FCM Token...');
+        try {
           fcmToken = await messaging().getToken();
           if (fcmToken) {
-            setPrefsValue(STORAGE.FCM_TOKEN, fcmToken);
+            setPrefsValue(STORAGE.FCM_TOKEN, fcmToken.trim());
           }
+        } catch (error) {
+          console.error('Failed to get FCM token:', error);
         }
-
-        if (!fcmToken) return;
-        fcmToken = fcmToken.trim();
-
-        const currentUserId = String(getPrefsValue(STORAGE.USER_ID) || '');
-        const registeredToken = getPrefsValue(STORAGE.REGISTERED_FCM_TOKEN) || '';
-        const registeredUserId = String(getPrefsValue(STORAGE.REGISTERED_USER_ID) || '');
-
-        // Because ProfileView cleared REGISTERED_USER_ID, this will be TRUE on login
-        const isUserChanged = currentUserId !== registeredUserId;
-        const isTokenChanged = registeredToken !== fcmToken;
-
-        if (isUserChanged || isTokenChanged) {
-          console.log('📝 Sending NEW token to backend for User:', currentUserId);
-          
-          await registerDeviceToken({
-            device_token: fcmToken,
-            device_type: Platform.OS as 'android' | 'ios',
-          }).unwrap();
-
-          // Remember that we registered this specific token for this specific user
-          setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, fcmToken);
-          setPrefsValue(STORAGE.REGISTERED_USER_ID, currentUserId);
-        }
-      } catch (error) {
-        console.error('API ERROR RESPONSE:', error);
       }
+      
+      // THAT'S IT! 
+      // The backend middleware will automatically grab this token from the 
+      // X-Device-Token header (attached in auth-api-slice.ts) the next time 
+      // any API call runs (e.g., getProfile).
     };
 
-    handleTokenRegistration();
-  }, [isLogin, registerDeviceToken]);
+    // Small delay to ensure navigation stack is fully ready
+    const timer = setTimeout(ensureFcmToken, 500);
+    return () => clearTimeout(timer);
+  }, [isLogin]); // ✅ Removed registerDeviceToken dependency
 
   return (
     <View style={styles.flexContainer}>
@@ -134,5 +121,5 @@ const RootNavigation = () => {
   );
 };
 
-const styles = StyleSheet.create({ flexContainer: { flex: 1 } });
+const styles = StyleSheet.create({flexContainer: {flex: 1}});
 export default RootNavigation;

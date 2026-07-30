@@ -7,8 +7,6 @@ import {
   StyleSheet,
   Platform,
   ActionSheetIOS,
-  Modal,
-  Pressable,
 } from 'react-native';
 import React, {useState, useEffect} from 'react';
 import {COLORS, FONT_FAMILY, scaleSize} from '@theme';
@@ -19,6 +17,7 @@ import {
   ICON_CAMERA,
   ICON_PLAY,
   ICON_CLOSE,
+  ICON_PAUSE,
 } from '@assets/icons';
 import {AppImage} from '@global-components';
 import {useAppSelector} from '@redux/reduxHook';
@@ -155,7 +154,7 @@ const ChatInput = ({
                 <View style={styles.recordingDot} />
                 <Text style={styles.recordingText}>Recording...</Text>
                 <TouchableOpacity onPress={handleAudio}>
-                  <ICON_CLOSE width={scaleSize(18)} height={scaleSize(18)} />
+                  <ICON_PAUSE width={scaleSize(18)} height={scaleSize(18)} />
                 </TouchableOpacity>
               </View>
             ) : uploadedType === 'audio' ? (

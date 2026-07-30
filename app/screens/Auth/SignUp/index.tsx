@@ -68,11 +68,10 @@ const SignUp: FC = () => {
         type: 'success',
       });
     } else {
-      // Toast.show({
-      //   text1: response?.error,
-      //   type: 'error',
-      // });
-      Alert.alert('Error', response?.error);
+      Toast.show({
+        text1: response?.error,
+        type: 'error',
+      });
     }
   };
 

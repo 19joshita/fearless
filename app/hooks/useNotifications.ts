@@ -40,8 +40,11 @@ const useNotifications = () => {
         }
       }
       await checkInitialNotification();
+
       unsub1 = messaging().onMessage(onForegroundMessage);
+
       unsub2 = messaging().onNotificationOpenedApp(remoteMessage => {
+        // ✅ Ignore tap if logged out
         const isLogin = store.getState().app.isLogin;
         if (!isLogin) return;
 
@@ -50,6 +53,7 @@ const useNotifications = () => {
 
       unsub3 = notifee.onForegroundEvent(({type, detail}) => {
         if (type === EventType.PRESS) {
+          // ✅ Ignore tap if logged out
           const isLogin = store.getState().app.isLogin;
           if (!isLogin) return;
 
@@ -60,10 +64,12 @@ const useNotifications = () => {
       });
 
       unsub4 = messaging().onTokenRefresh(async token => {
+        // ✅ Don't save new tokens if logged out
         const isLogin = store.getState().app.isLogin;
         if (!isLogin) return;
+
+        // Save to MMKV so the auth-api-slice middleware can send it to the backend
         setPrefsValue(STORAGE.FCM_TOKEN, token);
-        setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, '');
       });
     };
 
@@ -119,6 +125,7 @@ async function checkInitialNotification() {
 async function onForegroundMessage(
   remoteMessage: FirebaseMessagingTypes.RemoteMessage,
 ) {
+  // ✅ SAFETY NET: Block foreground notifications completely if logged out
   const isLogin = store.getState().app.isLogin;
   if (!isLogin) {
     console.log('🔥 Notification blocked - User is logged out');
@@ -162,6 +169,7 @@ async function onForegroundMessage(
 export function handleNotification(data?: any) {
   if (!data) return;
 
+  // ✅ Ignore navigation if logged out
   const isLogin = store.getState().app.isLogin;
   if (!isLogin) return;
 
@@ -202,21 +210,23 @@ export function handleNotification(data?: any) {
   }
 }
 
-// ✅ NEW: Add this function to properly logout and delete token
+// ✅ Call this from your Logout Button
 export const logoutAndDeleteToken = async () => {
   try {
-    // 1. Actually DELETE the FCM token from Firebase
+    // 1. Delete token from the actual device (so Firebase stops routing to it)
     await messaging().deleteToken();
-    console.log('🔑 FCM Token deleted successfully');
+    console.log('🔑 FCM Token deleted from device successfully');
   } catch (error) {
     console.error('Failed to delete FCM token:', error);
   }
 
-  // 2. Clear all notification-related storage
+  // 2. Clear local MMKV storage
   setPrefsValue(STORAGE.FCM_TOKEN, '');
-  setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, '');
-  setPrefsValue(STORAGE.REGISTERED_USER_ID, '');
 
-  // 3. Cancel all pending notifications
+  // 3. Clear the notification tray on the device
   await notifee.cancelAllNotifications();
+
+  // NOTE: We DO NOT call an API here.
+  // The backend middleware automatically destroys the token from the DB
+  // because the Logout API request includes the 'X-Device-Token' header!
 };

@@ -34,28 +34,33 @@ const ProfileView: FC = () => {
   const logout = async () => {
     try {
       // ==========================================
+      // 1. HIT BACKEND LOGOUT FIRST!!!
+      // ==========================================
+      // At this exact moment, STORAGE.FCM_TOKEN still has the token.
+      // auth-api-slice.ts reads it and attaches it to the X-Device-Token header.
+      // The backend middleware intercepts this and deletes it from the database.
+      await triggerLogout(null).unwrap().catch(console.error);
+      // ==========================================
+      // 2. LOCAL DEVICE CLEANUP (After backend is done)
+      // ==========================================
       try {
         await messaging().deleteToken();
-        console.log('✅ FCM Token Destroyed');
+        console.log('✅ FCM Token Destroyed from device');
       } catch (e) {
         console.error('Failed to delete token', e);
       }
-
-      // Clear local storage tracking variables
+      // Clear FCM token from local MMKV storage
       setPrefsValue(STORAGE.FCM_TOKEN, '');
-      setPrefsValue(STORAGE.REGISTERED_FCM_TOKEN, '');
-      setPrefsValue(STORAGE.REGISTERED_USER_ID, '');
+      // ✅ REMOVED: REGISTERED_FCM_TOKEN & REGISTERED_USER_ID (No longer needed in new flow)
 
       // Clear any visible notifications from the tray instantly
       await notifee.cancelAllNotifications();
 
       // ==========================================
-      // 2. NORMAL LOGOUT STUFF
+      // 3. NORMAL LOGOUT STUFF
       // ==========================================
-      triggerLogout(null).unwrap().catch(console.error);
-
       dispatch(setIsLogin(false));
-      dispatch(setUserInfo(undefined)); // Use undefined based on your slice
+      dispatch(setUserInfo(undefined));
 
       setPrefsValue(STORAGE.TOKEN, '');
       setPrefsValue(STORAGE.USER_ID, '');

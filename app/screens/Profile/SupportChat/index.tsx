@@ -9,12 +9,11 @@ import {
   StyleSheet,
   Image,
   TouchableOpacity,
-  Modal,
-  Pressable,
   NativeSyntheticEvent,
   NativeScrollEvent,
   Platform,
   Keyboard,
+  Linking,
 } from 'react-native';
 
 // ADDED: Reanimated imports for fakeView keyboard handling
@@ -161,11 +160,6 @@ const SupportChat = () => {
     null,
   );
 
-  const [mediaModal, setMediaModal] = useState<{
-    url: string;
-    type: 'image' | 'video';
-  } | null>(null);
-  const [isModalVideoLoading, setIsModalVideoLoading] = useState(false);
   const audioPlayerRef = useRef<VideoRef>(null);
 
   const {messages: socketMessages, presenceMap} = useSupportChatSocket(
@@ -308,11 +302,31 @@ const SupportChat = () => {
         console.log('No URI provided for upload');
         return null;
       }
-      console.log('Starting upload:', {uri, type, name});
+
+      // Fix for iOS: Ensure proper file URI format
+      let fileUri = uri;
+      if (Platform.OS === 'ios') {
+        // iOS file URIs need to be properly formatted
+        if (!fileUri.startsWith('file://')) {
+          fileUri = `file://${fileUri}`;
+        }
+        // Remove any ph:// or assets-library:// protocols (old iOS)
+        if (fileUri.includes('ph://') || fileUri.includes('assets-library://')) {
+          console.warn('Old iOS URI format detected, may need conversion');
+        }
+      }
+
+      console.log('Starting upload:', {
+        originalUri: uri,
+        fileUri,
+        type,
+        name,
+        platform: Platform.OS,
+      });
 
       const formData = new FormData();
       formData.append('file', {
-        uri,
+        uri: fileUri,
         type,
         name: name || 'media',
       } as unknown as Blob);
@@ -595,14 +609,17 @@ const SupportChat = () => {
     }
   };
 
+  // Open both images and videos in browser for smooth playback
   const openMediaModal = (url: string, type: 'image' | 'video') => {
-    if (type === 'video') setIsModalVideoLoading(true);
-    setMediaModal({url, type});
-  };
-
-  const closeMediaModal = () => {
-    setMediaModal(null);
-    setIsModalVideoLoading(false);
+    // Open in browser - videos play smooth, images show full screen
+    Linking.openURL(url).catch(err => {
+      console.error(`Failed to open ${type}:`, err);
+      Toast.show({
+        type: 'error',
+        text1: `Cannot open ${type}`,
+        text2: 'Please check your internet connection',
+      });
+    });
   };
   useEffect(() => {
     if (Platform.OS !== 'ios') {
@@ -965,62 +982,6 @@ const SupportChat = () => {
 
       {/* ADDED: fakeView to handle keyboard push smoothly */}
       {Platform.OS === 'android' && <Animated.View style={fakeView} />}
-      <Modal
-        visible={!!mediaModal}
-        transparent
-        animationType="fade"
-        onRequestClose={closeMediaModal}
-        statusBarTranslucent>
-        <Pressable style={styles.modalOverlay} onPress={closeMediaModal}>
-          <Pressable
-            style={styles.modalContentContainer}
-            onPress={e => e.stopPropagation()}>
-            <Pressable style={styles.modalCloseBtn} onPress={closeMediaModal}>
-              <Text style={styles.modalCloseBtnText}>X</Text>
-            </Pressable>
-
-            {mediaModal?.type === 'image' && (
-              <Image
-                source={{uri: mediaModal.url}}
-                style={styles.modalImage}
-                resizeMode="contain"
-              />
-            )}
-
-            {mediaModal?.type === 'video' && (
-              <View style={styles.modalVideo}>
-                {isModalVideoLoading && (
-                  <ActivityIndicator
-                    size="large"
-                    color={COLORS.WHITE_COLOR}
-                    style={{position: 'absolute', zIndex: 10}}
-                  />
-                )}
-
-                <Video
-                  key={mediaModal.url}
-                  source={{uri: mediaModal.url}}
-                  style={{width: '100%', height: '100%'}}
-                  resizeMode="contain"
-                  controls={true}
-                  paused={false}
-                  onLoadStart={() => setIsModalVideoLoading(true)}
-                  onReadyForDisplay={() => setIsModalVideoLoading(false)}
-                  onError={() => setIsModalVideoLoading(false)}
-                  bufferConfig={{
-                    minBufferMs: 500,
-                    maxBufferMs: 1500,
-                    //@ts-ignore
-                    playBufferMs: 250,
-                    bufferForPlaybackMs: 250,
-                    bufferForPlaybackAfterRebufferMs: 500,
-                  }}
-                />
-              </View>
-            )}
-          </Pressable>
-        </Pressable>
-      </Modal>
     </AppView>
   );
 };

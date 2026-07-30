@@ -1,5 +1,5 @@
 // @redux/useChatMedia.ts
-import { useState, useCallback, useRef, useEffect } from 'react';
+import {useState, useCallback, useRef, useEffect} from 'react';
 import {
   launchImageLibrary,
   launchCamera,
@@ -8,7 +8,7 @@ import {
   Asset,
 } from 'react-native-image-picker';
 import AudioRecord from 'react-native-audio-record';
-import { Platform, PermissionsAndroid, Alert } from 'react-native';
+import {Platform, PermissionsAndroid, Alert} from 'react-native';
 
 // ==================== GALLERY PICKER TYPES ====================
 interface SelectedMedia {
@@ -83,7 +83,11 @@ export const useGalleryPicker = (): UseGalleryPickerReturn => {
         }
 
         if (response.errorCode) {
-          console.error('Gallery Error:', response.errorCode, response.errorMessage);
+          console.error(
+            'Gallery Error:',
+            response.errorCode,
+            response.errorMessage,
+          );
           Alert.alert('Error', response.errorMessage || 'Failed to pick media');
           setError(response.errorMessage ?? 'Unknown error');
           setLoading(false);
@@ -132,7 +136,10 @@ export const useGalleryPicker = (): UseGalleryPickerReturn => {
         );
         if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
           console.log('Camera permission denied');
-          Alert.alert('Permission Denied', 'Camera permission is required to take photos.');
+          Alert.alert(
+            'Permission Denied',
+            'Camera permission is required to take photos.',
+          );
           setLoading(false);
           return;
         }
@@ -161,8 +168,15 @@ export const useGalleryPicker = (): UseGalleryPickerReturn => {
       }
 
       if (response.errorCode) {
-        console.error('Camera Error:', response.errorCode, response.errorMessage);
-        Alert.alert('Camera Error', response.errorMessage || 'Failed to open camera');
+        console.error(
+          'Camera Error:',
+          response.errorCode,
+          response.errorMessage,
+        );
+        Alert.alert(
+          'Camera Error',
+          response.errorMessage || 'Failed to open camera',
+        );
         setError(response.errorMessage ?? 'Unknown error');
         setLoading(false);
         return;
@@ -200,11 +214,16 @@ export const useGalleryPicker = (): UseGalleryPickerReturn => {
         ]);
 
         if (
-          permissions['android.permission.CAMERA'] !== PermissionsAndroid.RESULTS.GRANTED ||
-          permissions['android.permission.RECORD_AUDIO'] !== PermissionsAndroid.RESULTS.GRANTED
+          permissions['android.permission.CAMERA'] !==
+            PermissionsAndroid.RESULTS.GRANTED ||
+          permissions['android.permission.RECORD_AUDIO'] !==
+            PermissionsAndroid.RESULTS.GRANTED
         ) {
           console.log('Camera or microphone permission denied');
-          Alert.alert('Permission Denied', 'Camera and microphone permissions are required to record videos.');
+          Alert.alert(
+            'Permission Denied',
+            'Camera and microphone permissions are required to record videos.',
+          );
           setLoading(false);
           return;
         }
@@ -234,8 +253,15 @@ export const useGalleryPicker = (): UseGalleryPickerReturn => {
       }
 
       if (response.errorCode) {
-        console.error('Camera Video Error:', response.errorCode, response.errorMessage);
-        Alert.alert('Camera Error', response.errorMessage || 'Failed to record video');
+        console.error(
+          'Camera Video Error:',
+          response.errorCode,
+          response.errorMessage,
+        );
+        Alert.alert(
+          'Camera Error',
+          response.errorMessage || 'Failed to record video',
+        );
         setError(response.errorMessage ?? 'Unknown error');
         setLoading(false);
         return;
@@ -334,7 +360,8 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
             PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
             {
               title: 'Microphone Permission',
-              message: 'This app needs access to your microphone to record audio.',
+              message:
+                'This app needs access to your microphone to record audio.',
               buttonNeutral: 'Ask Me Later',
               buttonNegative: 'Cancel',
               buttonPositive: 'OK',

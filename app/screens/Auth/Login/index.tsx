@@ -56,15 +56,16 @@ const Login: FC = () => {
         // 3. Update Redux
         dispatch(setIsLogin(true));
         dispatch(setUserInfo(response?.data));
-        // Note: RootNavigation will handle generating the NEW FCM token
-        // as soon as isLogin turns to true.
+        // ✅ PERFECT: RootNavigation will handle generating the NEW FCM token
+        // as soon as isLogin turns to true, and the backend middleware will
+        // automatically pick it up from the headers!
         Toast.show({type: 'success', text1: TEXT.LOGIN_SUCCESS});
       } else {
-        Alert.alert('Error', response?.error);
+        Toast.show({type: 'error', text1: response?.error});
       }
     } catch (error: any) {
       const errMsg = error?.data?.error || 'Login failed';
-      Alert.alert('Error', errMsg);
+      Toast.show({type: 'error', text1: errMsg});
     }
   };
 

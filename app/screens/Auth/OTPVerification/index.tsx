@@ -52,7 +52,6 @@ const OTPVerification: FC = () => {
         otp: formik.values.otp,
       }).unwrap();
       if (response?.success) {
-        // Alert.alert('OTP verified');
         // resetAndNavigate(RouteNames.HOME);
         Toast.show({
           text1: TEXT.SIGNUP_SUCCESS,
@@ -64,18 +63,21 @@ const OTPVerification: FC = () => {
         setTimeout(() => {
           dispatch(setIsLogin(true));
         }, 400);
+        formik.resetForm();
       }
     } catch (err: any) {
-      // Error logic
+      Toast.show({
+        text1: err?.data?.error || err?.error || 'Failed to verify OTP',
+        type: 'error',
+      });
       console.error(
         'varify error ',
         err?.data?.error || 'Failed to verify OTP',
       );
-      // formik.resetForm();
-      Alert.alert(
-        'OTP Error',
-        err?.data?.error || err?.error || 'Failed to verify OTP',
-      );
+      Toast.show({
+        text1: err?.data?.error || err?.error || 'Failed to verify OTP',
+        type: 'error',
+      });
     }
   };
 
