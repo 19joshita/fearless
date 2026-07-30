@@ -311,7 +311,10 @@ const SupportChat = () => {
           fileUri = `file://${fileUri}`;
         }
         // Remove any ph:// or assets-library:// protocols (old iOS)
-        if (fileUri.includes('ph://') || fileUri.includes('assets-library://')) {
+        if (
+          fileUri.includes('ph://') ||
+          fileUri.includes('assets-library://')
+        ) {
           console.warn('Old iOS URI format detected, may need conversion');
         }
       }
@@ -388,8 +391,8 @@ const SupportChat = () => {
     // Handle duration - iOS returns duration in seconds, sometimes as decimal
     const duration = media.duration
       ? media.duration > 1000
-        ? Math.round(media.duration / 1000) 
-        : Math.round(media.duration) 
+        ? Math.round(media.duration / 1000)
+        : Math.round(media.duration)
       : null;
 
     setUploadedDuration(duration);
