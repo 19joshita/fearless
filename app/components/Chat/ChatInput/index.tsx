@@ -47,6 +47,9 @@ interface ChatInputProps {
   isRecording?: boolean;
   onRemoveMedia?: () => void;
   showInputIcon?: boolean;
+  uploadProgress?: number;
+  uploadError?: string | null;
+  onRetryUpload?: () => void;
 }
 
 const ChatInput = ({
@@ -63,6 +66,9 @@ const ChatInput = ({
   isRecording,
   onRemoveMedia,
   showInputIcon = false,
+  uploadProgress = 0,
+  uploadError = null,
+  onRetryUpload,
 }: ChatInputProps) => {
   const {TEXT} = useText();
   const Profile = useAppSelector(state => state.app?.userInfo);
@@ -75,7 +81,9 @@ const ChatInput = ({
   const [showActionSheet, setShowActionSheet] = useState<boolean>(false);
 
   const hasText = text.trim().length > 0;
-  const isSendDisabled = isDisabled || (!hasText && !uploadedUrl);
+  // Disable send if: no content, or media is still uploading
+  const isSendDisabled =
+    isDisabled || (!hasText && !uploadedUrl) || isUploading;
   const isMediaDisabled = isUploading || isRecording;
 
   useEffect(() => {
@@ -219,22 +227,7 @@ const ChatInput = ({
               </View>
             ) : (
               <>
-                {/* Loader while Image/Video is uploading */}
-                {(uploadedType === 'image' || uploadedType === 'video') &&
-                isUploading &&
-                !uploadedUrl ? (
-                  <View style={styles.mediaPreviewContainer}>
-                    <View style={styles.loaderPlaceholder}>
-                      <ActivityIndicator
-                        size="small"
-                        color={COLORS.SECONDARY_COLOR}
-                      />
-                      <Text style={styles.uploadingText}>Uploading...</Text>
-                    </View>
-                  </View>
-                ) : null}
-
-                {/* Actual Image/Video Preview after successful upload */}
+                {/* Image/Video Preview - Shows immediately (local or uploaded) */}
                 {uploadedUrl &&
                 (uploadedType === 'image' || uploadedType === 'video') ? (
                   <View style={styles.mediaPreviewContainer}>
@@ -254,23 +247,58 @@ const ChatInput = ({
                       />
                     )}
 
-                    {uploadedType === 'video' && (
-                      <View style={styles.videoPlayOverlay}>
-                        <ICON_PLAY
-                          width={scaleSize(16)}
-                          height={scaleSize(16)}
+                    {/* Upload Progress Overlay - Shows while uploading */}
+                    {isUploading && (
+                      <View style={styles.uploadingOverlay}>
+                        <ActivityIndicator
+                          size="small"
+                          color={COLORS.WHITE_COLOR}
                         />
+                        <Text style={styles.uploadingOverlayText}>
+                          {uploadProgress > 0
+                            ? `${uploadProgress}%`
+                            : 'Uploading...'}
+                        </Text>
                       </View>
                     )}
 
-                    <TouchableOpacity
-                      onPress={onRemoveMedia}
-                      style={styles.closeMediaBtn}>
-                      <ICON_CLOSE
-                        width={scaleSize(12)}
-                        height={scaleSize(12)}
-                      />
-                    </TouchableOpacity>
+                    {/* Error State Overlay - Shows on upload failure */}
+                    {uploadError && !isUploading && (
+                      <View style={styles.errorOverlay}>
+                        <Text style={styles.errorText}>Upload Failed</Text>
+                        {onRetryUpload && (
+                          <TouchableOpacity
+                            onPress={onRetryUpload}
+                            style={styles.retryButton}>
+                            <Text style={styles.retryButtonText}>Retry</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
+
+                    {/* Play Icon for Video (only when not uploading/error) */}
+                    {uploadedType === 'video' &&
+                      !isUploading &&
+                      !uploadError && (
+                        <View style={styles.videoPlayOverlay}>
+                          <ICON_PLAY
+                            width={scaleSize(16)}
+                            height={scaleSize(16)}
+                          />
+                        </View>
+                      )}
+
+                    {/* Close Button - ONLY shown after upload completes (not during upload) */}
+                    {!isUploading && (
+                      <TouchableOpacity
+                        onPress={onRemoveMedia}
+                        style={styles.closeMediaBtn}>
+                        <ICON_CLOSE
+                          width={scaleSize(12)}
+                          height={scaleSize(12)}
+                        />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 ) : null}
 
@@ -461,6 +489,49 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
+  },
+  uploadingOverlay: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    gap: scaleSize(4),
+  },
+  uploadingOverlayText: {
+    fontSize: scaleSize(11),
+    color: COLORS.WHITE_COLOR,
+    fontFamily: FONT_FAMILY.Medium,
+  },
+  errorOverlay: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 0, 0, 0.8)',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    gap: scaleSize(6),
+  },
+  errorText: {
+    fontSize: scaleSize(10),
+    color: COLORS.WHITE_COLOR,
+    fontFamily: FONT_FAMILY.Medium,
+  },
+  retryButton: {
+    backgroundColor: COLORS.WHITE_COLOR,
+    paddingHorizontal: scaleSize(12),
+    paddingVertical: scaleSize(4),
+    borderRadius: scaleSize(4),
+  },
+  retryButtonText: {
+    fontSize: scaleSize(10),
+    color: 'red',
+    fontFamily: FONT_FAMILY.Bold,
   },
   loaderPlaceholder: {
     width: '100%',

@@ -207,7 +207,6 @@ export const supportChatSlice = createApi({
         method: METHOD.POST,
         body: params,
       }),
-      // ✅ FIX: Removed 'LIST' to prevent overwriting optimistic 0 with stale DB data
       invalidatesTags: (result, error, {conversation_id}) => [
         {type: 'SupportChat', id: `Conversation-${conversation_id}`},
         {type: 'SupportChat', id: `Messages-${conversation_id}`},
@@ -264,7 +263,6 @@ export const supportChatSlice = createApi({
         method: METHOD.POST,
         body: {message_ids},
       }),
-      // ✅ FIX: Removed 'LIST' to prevent overwriting optimistic 0 with stale DB data
       invalidatesTags: (result, error, {conversationId}) => [
         {type: 'SupportChat', id: `Messages-${conversationId}`},
         {type: 'SupportChat', id: `Conversation-${conversationId}`},
@@ -298,7 +296,7 @@ export const supportChatSlice = createApi({
                   c => c.conversation_id === Number(conversationId),
                 );
                 if (convo) {
-                  convo.unread_count = 0; // ✅ FIX: Force to 0 instead of subtracting
+                  convo.unread_count = 0;
                 }
               }
             },

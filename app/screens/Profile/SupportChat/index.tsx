@@ -147,11 +147,24 @@ const SupportChat = () => {
 
   const isPaginating = useRef(false);
 
+  // Local preview (shown immediately when user selects media)
+  const [localPreviewUri, setLocalPreviewUri] = useState<string | null>(null);
+
+  // Server uploaded URL (set after upload completes)
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
   const [uploadedType, setUploadedType] = useState<
     'image' | 'video' | 'audio' | null
   >(null);
   const [uploadedDuration, setUploadedDuration] = useState<number | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Store pending upload info for retry
+  const [pendingUpload, setPendingUpload] = useState<{
+    uri: string;
+    type: string;
+    name: string;
+  } | null>(null);
 
   const [playingAudioId, setPlayingAudioId] = useState<number | string | null>(
     null,
@@ -303,6 +316,13 @@ const SupportChat = () => {
         return null;
       }
 
+      // Reset error and progress
+      setUploadError(null);
+      setUploadProgress(0);
+
+      // Store for retry
+      setPendingUpload({uri, type, name});
+
       // Fix for iOS: Ensure proper file URI format
       let fileUri = uri;
       if (Platform.OS === 'ios') {
@@ -335,19 +355,42 @@ const SupportChat = () => {
       } as unknown as Blob);
 
       try {
+        // Simulate progress (since RTK Query doesn't provide upload progress natively)
+        const progressInterval = setInterval(() => {
+          setUploadProgress(prev => {
+            if (prev >= 90) return prev; // Stop at 90%, wait for actual completion
+            return prev + 10;
+          });
+        }, 300);
+
         const response = await uploadFile(formData).unwrap();
+
+        clearInterval(progressInterval);
+        setUploadProgress(100);
+
         console.log('Upload successful:', response);
         setUploadedUrl(response.url);
+        setPendingUpload(null); // Clear pending upload on success
+
+        // Reset progress after short delay
+        setTimeout(() => {
+          setUploadProgress(0);
+        }, 500);
+
         return response.url;
       } catch (error: any) {
         console.error('Upload failed:', error);
+        setUploadProgress(0);
+        setUploadError(error?.data?.message || 'Upload failed');
+
         Toast.show({
           type: 'error',
           text1: 'Failed to upload file',
           text2: error?.data?.message || 'Please try again',
         });
-        setUploadedType(null);
-        setUploadedDuration(null);
+
+        // Keep uploadedType and local preview for retry
+        // DO NOT clear: setUploadedType(null), setLocalPreviewUri(null)
         return null;
       }
     },
@@ -355,10 +398,20 @@ const SupportChat = () => {
   );
 
   const handleRemoveMedia = useCallback(() => {
+    setLocalPreviewUri(null);
     setUploadedUrl(null);
     setUploadedType(null);
     setUploadedDuration(null);
+    setUploadProgress(0);
+    setUploadError(null);
+    setPendingUpload(null);
   }, []);
+
+  const handleRetryUpload = useCallback(() => {
+    if (!pendingUpload) return;
+    console.log('Retrying upload:', pendingUpload);
+    handleUploadFile(pendingUpload.uri, pendingUpload.type, pendingUpload.name);
+  }, [pendingUpload, handleUploadFile]);
 
   useEffect(() => {
     if (!selectedMedia) return;
@@ -386,6 +439,8 @@ const SupportChat = () => {
       mediaType = 'audio';
     }
 
+    // ✅ SET LOCAL PREVIEW IMMEDIATELY - Shows in ChatInput instantly
+    setLocalPreviewUri(media.uri);
     setUploadedType(mediaType);
 
     // Handle duration - iOS returns duration in seconds, sometimes as decimal
@@ -406,6 +461,7 @@ const SupportChat = () => {
       fileSize: media.fileSize,
     });
 
+    // Start upload in background - preview already visible above
     handleUploadFile(media.uri, mimeType, fileName);
     resetGallery();
   }, [selectedMedia, handleUploadFile, resetGallery]);
@@ -975,11 +1031,14 @@ const SupportChat = () => {
           capturePhoto={handleCapturePhoto}
           captureVideo={handleCaptureVideo}
           handleAudio={handleToggleRecording}
-          uploadedUrl={uploadedUrl}
+          uploadedUrl={uploadedUrl || localPreviewUri}
           uploadedType={uploadedType}
           isUploading={isUploading}
           isRecording={isRecording}
           onRemoveMedia={handleRemoveMedia}
+          uploadProgress={uploadProgress}
+          uploadError={uploadError}
+          onRetryUpload={handleRetryUpload}
         />
       </View>
 
