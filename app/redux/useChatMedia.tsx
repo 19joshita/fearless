@@ -1,5 +1,5 @@
 // @redux/useChatMedia.ts
-import {useState, useCallback, useRef, useEffect} from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   launchImageLibrary,
   launchCamera,
@@ -8,7 +8,7 @@ import {
   Asset,
 } from 'react-native-image-picker';
 import AudioRecord from 'react-native-audio-record';
-import {Platform, PermissionsAndroid, Alert} from 'react-native';
+import { Platform, PermissionsAndroid, Alert } from 'react-native';
 
 // ==================== GALLERY PICKER TYPES ====================
 interface SelectedMedia {
@@ -64,55 +64,53 @@ export const useGalleryPicker = (): UseGalleryPickerReturn => {
       setLoading(true);
       setError(null);
 
-      const defaultOptions: ImageLibraryOptions = {
-        mediaType: 'mixed',
-        selectionLimit: 1, // Fix: Changed from 0 to 1 for single selection
-        videoQuality: 'high',
-        quality: 0.8,
-        includeBase64: false,
-        ...options,
-      };
+      launchImageLibrary(
+        {
+          mediaType: 'mixed',
+          selectionLimit: 1,
+          includeBase64: false,
+          includeExtra: false,
+          quality: 1,
+          videoQuality: 'medium',
 
-      launchImageLibrary(defaultOptions, response => {
-        console.log('Gallery Response:', response);
+          presentationStyle: 'fullScreen',
 
-        if (response.didCancel) {
-          console.log('User cancelled gallery picker');
+          ...options,
+        },
+        response => {
           setLoading(false);
-          return;
-        }
 
-        if (response.errorCode) {
-          console.error(
-            'Gallery Error:',
-            response.errorCode,
-            response.errorMessage,
-          );
-          Alert.alert('Error', response.errorMessage || 'Failed to pick media');
-          setError(response.errorMessage ?? 'Unknown error');
-          setLoading(false);
-          return;
-        }
+          if (response.didCancel) {
+            return;
+          }
 
-        if (response.assets && response.assets.length > 0) {
-          const mediaData: SelectedMedia[] = response.assets.map(
-            (asset: Asset) => ({
-              uri: asset.uri,
-              type: asset.type,
-              fileName: asset.fileName,
-              fileSize: asset.fileSize,
-              width: asset.width,
-              height: asset.height,
-              duration: asset.duration,
-            }),
-          );
+          if (response.errorCode) {
+            const message = response.errorMessage || 'Failed to select media';
 
-          console.log('Selected Media:', mediaData);
-          setSelectedMedia(mediaData.length === 1 ? mediaData[0] : mediaData);
-        }
+            setError(message);
+            Alert.alert('Error', message);
+            return;
+          }
 
-        setLoading(false);
-      });
+          const asset = response.assets?.[0];
+
+          if (!asset?.uri) {
+            setError('Unable to read selected file.');
+            return;
+          }
+
+          // Immediate state update
+          setSelectedMedia({
+            uri: asset.uri,
+            type: asset.type,
+            fileName: asset.fileName,
+            fileSize: asset.fileSize,
+            width: asset.width,
+            height: asset.height,
+            duration: asset.duration,
+          });
+        },
+      );
     },
     [],
   );
@@ -215,9 +213,9 @@ export const useGalleryPicker = (): UseGalleryPickerReturn => {
 
         if (
           permissions['android.permission.CAMERA'] !==
-            PermissionsAndroid.RESULTS.GRANTED ||
+          PermissionsAndroid.RESULTS.GRANTED ||
           permissions['android.permission.RECORD_AUDIO'] !==
-            PermissionsAndroid.RESULTS.GRANTED
+          PermissionsAndroid.RESULTS.GRANTED
         ) {
           console.log('Camera or microphone permission denied');
           Alert.alert(

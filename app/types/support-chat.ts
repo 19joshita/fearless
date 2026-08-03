@@ -108,6 +108,10 @@ export interface SendMessageResponse {
 // ==================== Upload File ====================
 export interface UploadFileResponse {
   url: string;
+  thumbnail?: string;
+  duration?: number;
+  width?: number;
+  height?: number;
 }
 
 // ==================== Read Conversation ====================

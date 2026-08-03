@@ -1,3 +1,4 @@
+import React, {useState, useEffect, useMemo, useCallback, useRef} from 'react';
 import {
   View,
   TextInput,
@@ -7,8 +8,15 @@ import {
   StyleSheet,
   Platform,
   ActionSheetIOS,
+  Image,
+  ImageSourcePropType,
+  Animated,
+  Easing,
 } from 'react-native';
-import React, {useState, useEffect} from 'react';
+import Video from 'react-native-video';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import Svg, {Circle} from 'react-native-svg';
+
 import {COLORS, FONT_FAMILY, scaleSize} from '@theme';
 import {
   ICON_INPUT_RADIUS,
@@ -19,72 +27,113 @@ import {
   ICON_CLOSE,
   ICON_PAUSE,
 } from '@assets/icons';
+
 import {AppImage} from '@global-components';
 import {useAppSelector} from '@redux/reduxHook';
 import {useText} from '@localization';
-import Video from 'react-native-video';
-// ADDED: Import safe area to handle bottom insets universally
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 interface ChatInputProps {
   onPress: (text: string) => void;
+
   isDisabled?: boolean;
   showImage?: boolean;
+  showInputIcon?: boolean;
+
   openGallery?: () => void;
   capturePhoto?: () => void;
   captureVideo?: () => void;
+
   handleAudio?: () => void;
   startRecording?: () => void;
   stopRecording?: () => void;
+  isPickerLoading: boolean;
   handleUploadFile?: (
     uri: string,
     type: string,
     name: string,
   ) => Promise<string | null>;
+
   uploadedUrl?: string | null;
+  uploadedThumbnail?: string | null;
   uploadedType?: 'image' | 'video' | 'audio' | null;
+
   isUploading?: boolean;
   isRecording?: boolean;
-  onRemoveMedia?: () => void;
-  showInputIcon?: boolean;
+
   uploadProgress?: number;
   uploadError?: string | null;
+
+  uploadedDuration?: number;
+
   onRetryUpload?: () => void;
+  onRemoveMedia?: () => void;
 }
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 const ChatInput = ({
   onPress,
+
   isDisabled = false,
   showImage = false,
+  showInputIcon = false,
+
   openGallery,
   capturePhoto,
   captureVideo,
+
   handleAudio,
+
   uploadedUrl,
+  uploadedThumbnail,
   uploadedType,
-  isUploading,
-  isRecording,
-  onRemoveMedia,
-  showInputIcon = false,
+
+  isUploading = false,
+  isRecording = false,
+
   uploadProgress = 0,
   uploadError = null,
+
   onRetryUpload,
+  onRemoveMedia,
+  isPickerLoading,
 }: ChatInputProps) => {
   const {TEXT} = useText();
-  const Profile = useAppSelector(state => state.app?.userInfo);
-
-  // UNIVERSAL FIX: Get safe area bottom inset right inside the component
   const {bottom} = useSafeAreaInsets();
 
-  const [text, setText] = useState<string>('');
-  const [isAudioPlaying, setIsAudioPlaying] = useState<boolean>(false);
-  const [showActionSheet, setShowActionSheet] = useState<boolean>(false);
+  const Profile = useAppSelector(state => state.app.userInfo);
+
+  const [text, setText] = useState('');
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [showActionSheet, setShowActionSheet] = useState(false);
+  const progressAnim = useRef(new Animated.Value(0)).current;
+
+  // Spin animation ref for continuous rotation after 100%
+  const spinAnim = useRef(new Animated.Value(0)).current;
+
+  /**
+   * -------------------------------------------------------
+   * BASIC STATE
+   * -------------------------------------------------------
+   */
 
   const hasText = text.trim().length > 0;
-  // Disable send if: no content, or media is still uploading
+
+  const hasMedia =
+    !!uploadedUrl && uploadedType !== null && uploadedType !== undefined;
+
+  // Disable send while picking, uploading, or if empty
   const isSendDisabled =
-    isDisabled || (!hasText && !uploadedUrl) || isUploading;
-  const isMediaDisabled = isUploading || isRecording;
+    isDisabled || (!hasText && !hasMedia) || isUploading || isPickerLoading;
+
+  // Disable media buttons while picking, uploading, or recording
+  const isMediaDisabled = isUploading || isRecording || isPickerLoading;
+
+  /**
+   * -------------------------------------------------------
+   * RESET AUDIO
+   * -------------------------------------------------------
+   */
 
   useEffect(() => {
     if (!uploadedUrl) {
@@ -92,80 +141,158 @@ const ChatInput = ({
     }
   }, [uploadedUrl]);
 
-  const handleSend = () => {
-    if (isSendDisabled) return;
-    onPress(text.trim());
-    setText('');
-  };
+  /**
+   * -------------------------------------------------------
+   * SEND
+   * -------------------------------------------------------
+   */
 
-  const toggleAudioPlay = () => {
-    setIsAudioPlaying(prev => !prev);
-  };
-
-  const handleMediaAction = () => {
-    if (isMediaDisabled) {
+  const handleSend = useCallback(() => {
+    if (isSendDisabled) {
       return;
     }
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: [
-            'Cancel',
-            'Take Photo',
-            'Record Video',
-            'Choose from Gallery',
-          ],
-          cancelButtonIndex: 0,
-        },
-        buttonIndex => {
-          if (buttonIndex === 1) {
-            capturePhoto?.();
-          } else if (buttonIndex === 2) {
-            captureVideo?.();
-          } else if (buttonIndex === 3) {
-            openGallery?.();
-          }
-        },
-      );
-    } else {
-      setShowActionSheet(true);
+    onPress(text.trim());
+    setText('');
+  }, [isSendDisabled, onPress, text]);
+
+  /**
+   * -------------------------------------------------------
+   * AUDIO
+   * -------------------------------------------------------
+   */
+
+  const toggleAudioPlay = useCallback(() => {
+    setIsAudioPlaying(prev => !prev);
+  }, []);
+
+  const previewUri = useMemo(() => {
+    if (!uploadedUrl) {
+      return null;
     }
-  };
 
-  const handleAndroidOption = (option: string) => {
-    setShowActionSheet(false);
-    setTimeout(() => {
-      if (option === 'photo') {
-        capturePhoto?.();
-      } else if (option === 'video') {
-        captureVideo?.();
-      } else if (option === 'gallery') {
-        openGallery?.();
-      }
-    }, 100);
-  };
+    if (uploadedType === 'image') {
+      return uploadedUrl;
+    }
 
+    if (uploadedType === 'video' && !isUploading && uploadedThumbnail) {
+      return uploadedThumbnail;
+    }
+
+    return uploadedUrl;
+  }, [uploadedUrl, uploadedThumbnail, uploadedType, isUploading]);
+
+  const shouldRenderImage = useMemo(() => {
+    if (uploadedType === 'image') {
+      return true;
+    }
+
+    if (uploadedType === 'video' && !isUploading && uploadedThumbnail) {
+      return true;
+    }
+
+    return false;
+  }, [uploadedType, uploadedThumbnail, isUploading]);
+
+  const shouldRenderVideo = useMemo(() => {
+    return uploadedType === 'video' && !shouldRenderImage;
+  }, [uploadedType, shouldRenderImage]);
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
+
+  useEffect(() => {
+    setThumbnailFailed(false);
+  }, [uploadedThumbnail, uploadedUrl]);
+
+  /**
+   * -------------------------------------------------------
+   * ANIMATED PROGRESS CIRCLE VARIABLES
+   * -------------------------------------------------------
+   */
+  const circleSize = scaleSize(36);
+  const circleStroke = scaleSize(3);
+  const circleRadius = (circleSize - circleStroke) / 2;
+  const circleCircumference = 2 * Math.PI * circleRadius;
+
+  const strokeDashoffset = progressAnim.interpolate({
+    inputRange: [0, 100],
+    outputRange: [circleCircumference, 0],
+  });
+
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: uploadProgress,
+      duration: 180,
+      easing: Easing.linear,
+      useNativeDriver: false, // Required for SVG strokeDashoffset
+    }).start();
+  }, [uploadProgress]);
+
+  /**
+   * -------------------------------------------------------
+   * CONTINUOUS SPIN ANIMATION LOGIC
+   * Starts exactly at 100% and keeps spinning until isUploading turns false
+   * -------------------------------------------------------
+   */
+  useEffect(() => {
+    if (uploadProgress >= 100 && isUploading) {
+      spinAnim.setValue(0);
+      const spinLoop = Animated.loop(
+        Animated.timing(spinAnim, {
+          toValue: 1,
+          duration: 1000, // 1 second per complete round
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }),
+      );
+      spinLoop.start();
+      return () => spinLoop.stop();
+    } else {
+      spinAnim.setValue(0);
+    }
+  }, [uploadProgress, isUploading]);
+
+  // -90deg starts the fill from the top. 270deg is exactly one 360deg rotation from -90deg.
+  const spin = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['-90deg', '270deg'],
+  });
+
+  const renderImagePreview = shouldRenderImage && !thumbnailFailed;
+  const renderVideoPreview = uploadedType === 'video' && !renderImagePreview;
+
+  // ===========================
+  // JSX STARTS FROM PART 2
+  // ===========================
   return (
     <>
       <View style={[styles.container, {paddingBottom: bottom}]}>
         {showImage && (
           <AppImage imageContainerStyle={styles.avatar} uri={Profile?.image} />
         )}
+
         <View style={styles.inputWrapper}>
           <View style={styles.bubblePointer}>
             <ICON_INPUT_RADIUS />
           </View>
+
           <View style={styles.bubble}>
-            {/* --- 1. Recording UI --- */}
+            {/* ======================================================
+                RECORDING UI
+            ====================================================== */}
+
             {isRecording ? (
               <View style={styles.recordingContainer}>
                 <View style={styles.recordingDot} />
+
                 <Text style={styles.recordingText}>Recording...</Text>
-                <TouchableOpacity onPress={handleAudio}>
+
+                <TouchableOpacity activeOpacity={0.8} onPress={handleAudio}>
                   <ICON_PAUSE width={scaleSize(18)} height={scaleSize(18)} />
                 </TouchableOpacity>
               </View>
             ) : uploadedType === 'audio' ? (
+              /* ======================================================
+                  AUDIO PREVIEW
+              ====================================================== */
               <View style={styles.audioContainer}>
                 {isUploading ? (
                   <ActivityIndicator
@@ -174,27 +301,30 @@ const ChatInput = ({
                   />
                 ) : (
                   <TouchableOpacity
+                    activeOpacity={0.8}
                     onPress={toggleAudioPlay}
                     style={styles.playBtn}>
                     {isAudioPlaying ? (
                       <ICON_CLOSE
-                        width={scaleSize(16)}
-                        height={scaleSize(16)}
+                        width={scaleSize(15)}
+                        height={scaleSize(15)}
                       />
                     ) : (
-                      <ICON_PLAY width={scaleSize(20)} height={scaleSize(20)} />
+                      <ICON_PLAY width={scaleSize(18)} height={scaleSize(18)} />
                     )}
                   </TouchableOpacity>
                 )}
+
                 <View style={styles.audioWaveContainer}>
                   <View style={styles.waveform}>
-                    {[...Array(20)].map((_, i) => (
+                    {Array.from({length: 22}).map((_, index) => (
                       <View
-                        key={i}
+                        key={index}
                         style={[
                           styles.waveBar,
                           {
-                            height: Math.random() * 16 + 6,
+                            height: 6 + ((index * 9) % 18),
+
                             backgroundColor: isAudioPlaying
                               ? COLORS.SECONDARY_COLOR
                               : COLORS.GRAY_TEXT_COLOR,
@@ -203,96 +333,167 @@ const ChatInput = ({
                       />
                     ))}
                   </View>
+
                   <Text style={styles.audioLabel}>
-                    {isUploading ? 'Uploading Audio...' : 'Audio'}
+                    {isUploading ? 'Uploading...' : 'Audio Message'}
                   </Text>
                 </View>
 
-                {!isUploading && (
-                  <TouchableOpacity
-                    onPress={onRemoveMedia}
-                    style={styles.closeMediaBtn}>
-                    <ICON_CLOSE width={scaleSize(14)} height={scaleSize(14)} />
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={onRemoveMedia}
+                  style={styles.closeMediaBtn}>
+                  <ICON_CLOSE width={scaleSize(14)} height={scaleSize(14)} />
+                </TouchableOpacity>
 
                 {!isUploading && uploadedUrl && (
                   <Video
-                    source={{uri: uploadedUrl}}
+                    source={{
+                      uri: uploadedUrl,
+                    }}
                     paused={!isAudioPlaying}
-                    repeat={true}
+                    repeat
+                    playInBackground={false}
+                    playWhenInactive={false}
+                    ignoreSilentSwitch="ignore"
                     style={styles.hiddenAudioPlayer}
                   />
                 )}
               </View>
             ) : (
               <>
-                {/* Image/Video Preview - Shows immediately (local or uploaded) */}
-                {uploadedUrl &&
-                (uploadedType === 'image' || uploadedType === 'video') ? (
-                  <View style={styles.mediaPreviewContainer}>
-                    {uploadedType === 'video' ? (
-                      <Video
-                        source={{uri: uploadedUrl}}
-                        style={styles.mediaPreview}
-                        resizeMode="cover"
-                        paused={true}
-                        muted={true}
-                        repeat={false}
-                      />
-                    ) : (
-                      <AppImage
-                        uri={uploadedUrl}
-                        customStyle={styles.mediaPreview}
-                      />
-                    )}
-
-                    {/* Upload Progress Overlay - Shows while uploading */}
-                    {isUploading && (
-                      <View style={styles.uploadingOverlay}>
+                {/* ======================================================
+                    UNIFIED MEDIA CONTAINER
+                    Shows for both Picker Loading and Uploaded Media
+                ====================================================== */}
+                {(isPickerLoading || hasMedia) && (
+                  <View
+                    style={[
+                      styles.mediaPreviewContainer,
+                      styles.mediaContainerShadow,
+                    ]}>
+                    {/* ---------- PICKER LOADING OVERLAY ---------- */}
+                    {isPickerLoading && !hasMedia && (
+                      <View style={styles.pickerLoadingOverlay}>
                         <ActivityIndicator
                           size="small"
                           color={COLORS.WHITE_COLOR}
                         />
-                        <Text style={styles.uploadingOverlayText}>
-                          {uploadProgress > 0
-                            ? `${uploadProgress}%`
-                            : 'Uploading...'}
-                        </Text>
                       </View>
                     )}
 
-                    {/* Error State Overlay - Shows on upload failure */}
-                    {uploadError && !isUploading && (
+                    {/* ---------- IMAGE ---------- */}
+
+                    {renderImagePreview && previewUri && (
+                      <Image
+                        source={{uri: previewUri}}
+                        style={styles.mediaPreview}
+                        resizeMode="cover"
+                        fadeDuration={0}
+                        onError={() => {
+                          if (uploadedType === 'video') {
+                            setThumbnailFailed(true);
+                          }
+                        }}
+                      />
+                    )}
+
+                    {/* ---------- VIDEO ---------- */}
+
+                    {renderVideoPreview && uploadedUrl && (
+                      <Video
+                        source={{uri: uploadedUrl}}
+                        style={styles.mediaPreview}
+                        resizeMode="cover"
+                        paused
+                        muted
+                        controls={false}
+                        repeat={false}
+                        playWhenInactive={false}
+                        playInBackground={false}
+                        ignoreSilentSwitch="ignore"
+                      />
+                    )}
+
+                    {/* =====================================================
+                        WHATSAPP STYLE CIRCULAR GREEN PROGRESS
+                        + Continuous Spin after 100%
+                    ====================================================== */}
+
+                    {isUploading && hasMedia && (
+                      <View style={styles.progressOverlay}>
+                        <Animated.View style={{transform: [{rotate: spin}]}}>
+                          <Svg width={circleSize} height={circleSize}>
+                            {/* Background Track Circle */}
+                            <Circle
+                              cx={circleSize / 2}
+                              cy={circleSize / 2}
+                              r={circleRadius}
+                              stroke="rgba(0, 0, 0, 0.2)"
+                              strokeWidth={circleStroke}
+                              fill="transparent"
+                            />
+                            {/* Animated Progress Circle */}
+                            <AnimatedCircle
+                              cx={circleSize / 2}
+                              cy={circleSize / 2}
+                              r={circleRadius}
+                              stroke="#25D366"
+                              strokeWidth={circleStroke}
+                              fill="transparent"
+                              strokeDasharray={circleCircumference}
+                              strokeDashoffset={strokeDashoffset}
+                              strokeLinecap="round"
+                            />
+                          </Svg>
+                        </Animated.View>
+                      </View>
+                    )}
+
+                    {/* =====================================================
+                        ERROR
+                    ====================================================== */}
+
+                    {!!uploadError && !isUploading && hasMedia && (
                       <View style={styles.errorOverlay}>
                         <Text style={styles.errorText}>Upload Failed</Text>
+
                         {onRetryUpload && (
                           <TouchableOpacity
-                            onPress={onRetryUpload}
-                            style={styles.retryButton}>
+                            activeOpacity={0.8}
+                            style={styles.retryButton}
+                            onPress={onRetryUpload}>
                             <Text style={styles.retryButtonText}>Retry</Text>
                           </TouchableOpacity>
                         )}
                       </View>
                     )}
 
-                    {/* Play Icon for Video (only when not uploading/error) */}
+                    {/* =====================================================
+                        VIDEO PLAY ICON
+                    ===================================================== */}
+
                     {uploadedType === 'video' &&
                       !isUploading &&
-                      !uploadError && (
+                      !uploadError &&
+                      hasMedia && (
                         <View style={styles.videoPlayOverlay}>
                           <ICON_PLAY
-                            width={scaleSize(16)}
-                            height={scaleSize(16)}
+                            width={scaleSize(18)}
+                            height={scaleSize(18)}
                           />
                         </View>
                       )}
 
-                    {/* Close Button - ONLY shown after upload completes (not during upload) */}
-                    {!isUploading && (
+                    {/* =====================================================
+                        REMOVE BUTTON (Only show if media actually exists)
+                    ===================================================== */}
+
+                    {hasMedia && (
                       <TouchableOpacity
-                        onPress={onRemoveMedia}
-                        style={styles.closeMediaBtn}>
+                        activeOpacity={0.8}
+                        style={styles.closeMediaBtn}
+                        onPress={onRemoveMedia}>
                         <ICON_CLOSE
                           width={scaleSize(12)}
                           height={scaleSize(12)}
@@ -300,39 +501,58 @@ const ChatInput = ({
                       </TouchableOpacity>
                     )}
                   </View>
-                ) : null}
+                )}
 
                 <View style={styles.inputRow}>
                   <TextInput
-                    placeholder={TEXT.ASK_A_QUESTION}
-                    placeholderTextColor={COLORS.BODY_TEXT_COLOR}
                     value={text}
                     onChangeText={setText}
+                    placeholder={TEXT.ASK_A_QUESTION}
+                    placeholderTextColor={COLORS.BODY_TEXT_COLOR}
                     allowFontScaling={false}
-                    style={[styles.textInput, {color: COLORS.BODY_TEXT_COLOR}]}
+                    multiline
+                    maxLength={2000}
+                    editable={!isDisabled}
+                    style={[
+                      styles.textInput,
+                      {
+                        color: COLORS.BODY_TEXT_COLOR,
+                      },
+                    ]}
                   />
+
                   {showInputIcon && (
                     <>
+                      {/* Gallery */}
+
                       <TouchableOpacity
-                        // onPress={handleMediaAction}
-                        onPress={() => handleAndroidOption('gallery')}
+                        activeOpacity={0.8}
+                        disabled={isMediaDisabled}
+                        onPress={() => openGallery?.()}
                         style={[
                           styles.iconBtn,
-                          isMediaDisabled && {opacity: 0.4},
-                        ]}
-                        disabled={isMediaDisabled}>
+                          isMediaDisabled && {
+                            opacity: 0.4,
+                          },
+                        ]}>
                         <ICON_CAMERA
                           width={scaleSize(20)}
                           height={scaleSize(20)}
                         />
                       </TouchableOpacity>
+
+                      {/* Audio */}
+
                       <TouchableOpacity
+                        activeOpacity={0.8}
+                        disabled={isMediaDisabled}
                         onPress={handleAudio}
                         style={[
                           styles.iconBtn,
-                          isMediaDisabled && {opacity: 0.4},
-                        ]}
-                        disabled={isMediaDisabled}>
+                          isMediaDisabled && {
+                            opacity: 0.4,
+                          },
+                        ]}>
                         <ICON_MICROPHONE
                           width={scaleSize(20)}
                           height={scaleSize(20)}
@@ -346,7 +566,12 @@ const ChatInput = ({
           </View>
         </View>
 
+        {/* ======================================================
+            SEND BUTTON
+        ====================================================== */}
+
         <TouchableOpacity
+          activeOpacity={0.85}
           disabled={isSendDisabled}
           onPress={handleSend}
           style={[
@@ -358,69 +583,22 @@ const ChatInput = ({
               opacity: isSendDisabled ? 0.5 : 1,
             },
           ]}>
-          <ICON_SEND width={scaleSize(16)} height={scaleSize(16)} />
+          {isUploading || isPickerLoading ? (
+            <ActivityIndicator size="small" color={COLORS.WHITE_COLOR} />
+          ) : (
+            <ICON_SEND width={scaleSize(16)} height={scaleSize(16)} />
+          )}
         </TouchableOpacity>
       </View>
-
-      {/* Android Action Sheet Modal */}
-      {/* {Platform.OS === 'android' && (
-        <Modal
-          visible={showActionSheet}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowActionSheet(false)}>
-          <Pressable
-            style={styles.modalOverlay}
-            onPress={() => setShowActionSheet(false)}>
-            <View style={styles.actionSheetContainer}>
-              <TouchableOpacity
-                style={styles.actionSheetOption}
-                onPress={() => handleAndroidOption('photo')}>
-                <ICON_CAMERA width={scaleSize(24)} height={scaleSize(24)} />
-                <Text style={styles.actionSheetText}>Take Photo</Text>
-              </TouchableOpacity>
-
-              <View style={styles.actionSheetDivider} />
-
-              <TouchableOpacity
-                style={styles.actionSheetOption}
-                onPress={() => handleAndroidOption('video')}>
-                <ICON_CAMERA width={scaleSize(24)} height={scaleSize(24)} />
-                <Text style={styles.actionSheetText}>Record Video</Text>
-              </TouchableOpacity>
-
-              <View style={styles.actionSheetDivider} />
-
-              <TouchableOpacity
-                style={styles.actionSheetOption}
-                onPress={() => handleAndroidOption('gallery')}>
-                <ICON_CAMERA width={scaleSize(24)} height={scaleSize(24)} />
-                <Text style={styles.actionSheetText}>Choose from Gallery</Text>
-              </TouchableOpacity>
-
-              <View style={styles.actionSheetDivider} />
-
-              <TouchableOpacity
-                style={styles.actionSheetOption}
-                onPress={() => setShowActionSheet(false)}>
-                <ICON_CLOSE width={scaleSize(24)} height={scaleSize(24)} />
-                <Text style={[styles.actionSheetText, styles.cancelText]}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Modal>
-      )} */}
     </>
   );
 };
 
+export default React.memo(ChatInput);
+
 const styles = StyleSheet.create({
   container: {
     marginTop: scaleSize(10),
-    // Removed static marginVertical to prevent double-padding.
-    // paddingBottom is now injected dynamically via props in the component.
     flexDirection: 'row' as const,
     alignItems: 'flex-end' as const,
     gap: scaleSize(8),
@@ -474,11 +652,18 @@ const styles = StyleSheet.create({
     marginBottom: scaleSize(8),
     borderRadius: scaleSize(8),
     overflow: 'hidden' as const,
+    backgroundColor: '#E0E0E0', // Faint bg so the loader box is visible during picker processing
   },
   mediaPreview: {
     width: '100%',
     height: '100%',
     borderRadius: scaleSize(8),
+  },
+  pickerLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)', // Black overlay identical to video play icon
   },
   videoPlayOverlay: {
     position: 'absolute' as const,
@@ -489,22 +674,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
-  },
-  uploadingOverlay: {
-    position: 'absolute' as const,
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    gap: scaleSize(4),
-  },
-  uploadingOverlayText: {
-    fontSize: scaleSize(11),
-    color: COLORS.WHITE_COLOR,
-    fontFamily: FONT_FAMILY.Medium,
   },
   errorOverlay: {
     position: 'absolute' as const,
@@ -532,20 +701,6 @@ const styles = StyleSheet.create({
     fontSize: scaleSize(10),
     color: 'red',
     fontFamily: FONT_FAMILY.Bold,
-  },
-  loaderPlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: COLORS.WHITE_COLOR,
-    borderRadius: scaleSize(8),
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    gap: scaleSize(4),
-  },
-  uploadingText: {
-    fontSize: scaleSize(10),
-    color: COLORS.GRAY_TEXT_COLOR,
-    fontFamily: FONT_FAMILY.Regular,
   },
   closeMediaBtn: {
     position: 'absolute' as const,
@@ -646,6 +801,14 @@ const styles = StyleSheet.create({
   cancelText: {
     color: COLORS.BUTTON_BORDER_COLOR,
   },
+  progressOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  mediaContainerShadow: {
+    overflow: 'hidden',
+    borderRadius: scaleSize(8),
+  },
 });
-
-export default ChatInput;

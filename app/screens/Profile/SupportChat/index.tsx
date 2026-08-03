@@ -14,11 +14,10 @@ import {
   Platform,
   Keyboard,
   Linking,
+  Alert,
 } from 'react-native';
 
-// ADDED: Reanimated imports for fakeView keyboard handling
 import Animated, {useAnimatedStyle} from 'react-native-reanimated';
-
 import Video, {VideoRef} from 'react-native-video';
 import {AppView, ChatHeader, ChatInput} from '@components';
 import {COLORS, FONT_FAMILY, FONT_VARIENTS, scaleSize, SPACING} from '@theme';
@@ -27,7 +26,7 @@ import {RouteProp, useRoute, useFocusEffect} from '@react-navigation/native';
 import {useText} from '@localization';
 import {useAppSelector} from '@redux/reduxHook';
 import Toast from 'react-native-toast-message';
-
+import axios from 'axios';
 import {
   supportChatSlice,
   useDeleteMessageMutation,
@@ -46,15 +45,15 @@ import {
 
 import type {Message} from 'types/support-chat';
 import {AppImage} from '@global-components';
-// These are already in your file and are required for the fakeView logic
 import useKeyboardAnimation from './../../Home/Chat/UseKeyboardAnimation';
 import useIsTabScreen from './../../Home/Chat/useIsTabScreen';
 import {useAudioRecorder, useGalleryPicker} from '@redux/useChatMedia';
 import {useSupportChatSocket} from './../../../hooks/useSupportChatSocket';
 import {store} from '@redux/store';
+import {ENDPOINTS, getPrefsValue} from '@utils';
+import {STORAGE} from '@constants';
 
 // --- Types ---
-
 type SupportChatRouteParams = {
   mode: 'user' | 'admin';
   conversationId?: string;
@@ -65,6 +64,31 @@ type RouteProps = RouteProp<
   {SupportChat: SupportChatRouteParams},
   'SupportChat'
 >;
+
+// Consolidated Media State Type to prevent mixing
+type MediaState = {
+  localUri: string | null;
+  serverUrl: string | null;
+  serverThumbnail: string | null;
+  type: 'image' | 'video' | 'audio' | null;
+  duration: number | null;
+  isUploading: boolean;
+  progress: number;
+  error: string | null;
+  pendingRetry: {uri: string; type: string; name: string} | null;
+};
+
+const initialMediaState: MediaState = {
+  localUri: null,
+  serverUrl: null,
+  serverThumbnail: null,
+  type: null,
+  duration: null,
+  isUploading: false,
+  progress: 0,
+  error: null,
+  pendingRetry: null,
+};
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -112,7 +136,6 @@ const MessageStatusTick = ({status}: {status?: string | null}) => {
 };
 
 // --- Component ---
-
 const SupportChat = () => {
   const route = useRoute<RouteProps>();
   const {
@@ -121,6 +144,7 @@ const SupportChat = () => {
     capturePhoto,
     captureVideo,
     reset: resetGallery,
+    loading: isPickerLoading,
   } = useGalleryPicker();
   const [deleteSupportMessage] = useDeleteMessageMutation();
   const [markMessagesAsRead] = useMarkMessagesAsReadMutation();
@@ -140,31 +164,21 @@ const SupportChat = () => {
   const {bottom} = useSafeAreaInsets();
   const profile = useAppSelector(state => state.app?.userInfo);
   const flatListRef = useRef<FlatList>(null);
+  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
   const [messages, setMessages] = useState<Message[]>([]);
-
   const messagesRef = useRef<Message[]>([]);
   const processedSocketIdsRef = useRef<Set<number>>(new Set());
-
   const isPaginating = useRef(false);
 
-  // Local preview (shown immediately when user selects media)
-  const [localPreviewUri, setLocalPreviewUri] = useState<string | null>(null);
+  // ==========================================
+  // SINGLE CONSOLIDATED MEDIA STATE
+  // ==========================================
+  const [mediaState, setMediaState] = useState<MediaState>(initialMediaState);
 
-  // Server uploaded URL (set after upload completes)
-  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
-  const [uploadedType, setUploadedType] = useState<
-    'image' | 'video' | 'audio' | null
-  >(null);
-  const [uploadedDuration, setUploadedDuration] = useState<number | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<number>(0);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-
-  // Store pending upload info for retry
-  const [pendingUpload, setPendingUpload] = useState<{
-    uri: string;
-    type: string;
-    name: string;
-  } | null>(null);
+  // CRITICAL FIX: Lock to prevent gallery picker re-emissions from wiping upload state
+  const isMediaProcessedRef = useRef(false);
 
   const [playingAudioId, setPlayingAudioId] = useState<number | string | null>(
     null,
@@ -172,23 +186,18 @@ const SupportChat = () => {
   const [audioLoadingId, setAudioLoadingId] = useState<number | string | null>(
     null,
   );
-
   const audioPlayerRef = useRef<VideoRef>(null);
-
   const {messages: socketMessages, presenceMap} = useSupportChatSocket(
     conversationId ?? null,
   );
-
   const [sendMessage] = useSendSupportMessageMutation();
-  const [uploadFile, {isLoading: isUploading}] =
-    useUploadSupportChatFileMutation();
+  const [uploadFile] = useUploadSupportChatFileMutation();
 
   // ==========================================
   // PAGINATION STATE
   // ==========================================
   const [limit, setLimit] = useState(20);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-
   const {
     data: messagesData,
     isFetching: isApiFetching,
@@ -197,7 +206,6 @@ const SupportChat = () => {
     {conversationId: conversationId ?? '', page: 1, limit},
     {skip: !conversationId},
   );
-
   const participants = messagesData?.data?.participants ?? [];
   const senderType = mode === 'admin' ? 'admin' : 'user';
   const otherParticipant = participants.find(p => p.role !== senderType);
@@ -205,10 +213,8 @@ const SupportChat = () => {
   const isOtherUserOnline = otherParticipant?.id
     ? presenceMap[otherParticipant.id] === 'online'
     : false;
-
   const [menuVisibleId, setMenuVisibleId] = useState<number | null>(null);
   const [deletedIds, setDeletedIds] = useState<Set<number>>(new Set());
-
   const hasMore = messagesData?.data?.pagination?.has_next_page ?? false;
 
   useEffect(() => {
@@ -281,6 +287,8 @@ const SupportChat = () => {
     setLimit(20);
     isPaginating.current = false;
     setIsLoadingMore(false);
+    setMediaState(initialMediaState);
+    isMediaProcessedRef.current = false;
 
     if (conversationId) {
       store.dispatch(
@@ -309,170 +317,278 @@ const SupportChat = () => {
     } catch (error: any) {}
   };
 
+  // ==========================================
+  // IMPROVED UPLOAD HANDLER (SMOOTH WA PROGRESS)
+  // ==========================================
+
   const handleUploadFile = useCallback(
     async (uri: string, type: string, name: string): Promise<string | null> => {
-      if (!uri) {
-        console.log('No URI provided for upload');
-        return null;
-      }
+      try {
+        if (!uri) return null;
 
-      // Reset error and progress
-      setUploadError(null);
-      setUploadProgress(0);
+        let fileUri = uri;
 
-      // Store for retry
-      setPendingUpload({uri, type, name});
-
-      // Fix for iOS: Ensure proper file URI format
-      let fileUri = uri;
-      if (Platform.OS === 'ios') {
-        // iOS file URIs need to be properly formatted
-        if (!fileUri.startsWith('file://')) {
+        if (Platform.OS === 'ios' && !fileUri.startsWith('file://')) {
           fileUri = `file://${fileUri}`;
         }
-        // Remove any ph:// or assets-library:// protocols (old iOS)
+
         if (
-          fileUri.includes('ph://') ||
-          fileUri.includes('assets-library://')
+          Platform.OS === 'android' &&
+          !fileUri.startsWith('file://') &&
+          !fileUri.startsWith('content://')
         ) {
-          console.warn('Old iOS URI format detected, may need conversion');
+          fileUri = `file://${fileUri}`;
         }
-      }
 
-      console.log('Starting upload:', {
-        originalUri: uri,
-        fileUri,
-        type,
-        name,
-        platform: Platform.OS,
-      });
+        const formData = new FormData();
 
-      const formData = new FormData();
-      formData.append('file', {
-        uri: fileUri,
-        type,
-        name: name || 'media',
-      } as unknown as Blob);
+        formData.append('file', {
+          uri: fileUri,
+          type: type || 'application/octet-stream',
+          name: name || 'media',
+        } as any);
 
-      try {
-        // Simulate progress (since RTK Query doesn't provide upload progress natively)
-        const progressInterval = setInterval(() => {
-          setUploadProgress(prev => {
-            if (prev >= 90) return prev; // Stop at 90%, wait for actual completion
-            return prev + 10;
-          });
-        }, 300);
+        const token = getPrefsValue(STORAGE.TOKEN);
 
-        const response = await uploadFile(formData).unwrap();
+        const currentLang =
+          getPrefsValue(STORAGE.CURRENT_LANGUAGE) ||
+          store.getState().app?.currentLanguage ||
+          'en';
 
-        clearInterval(progressInterval);
-        setUploadProgress(100);
+        const uploadUrl =
+          'https://app.fearlesscode.de/api/v1/support-chat/upload';
 
-        console.log('Upload successful:', response);
-        setUploadedUrl(response.url);
-        setPendingUpload(null); // Clear pending upload on success
+        console.log('========== UPLOAD START ==========');
+        console.log('URL:', uploadUrl);
+        console.log('URI:', fileUri);
+        console.log('TYPE:', type);
+        console.log('NAME:', name);
 
-        // Reset progress after short delay
-        setTimeout(() => {
-          setUploadProgress(0);
-        }, 500);
+        setMediaState(prev => ({
+          ...prev,
+          isUploading: true,
+          progress: 0,
+          error: null,
+        }));
 
-        return response.url;
-      } catch (error: any) {
-        console.error('Upload failed:', error);
-        setUploadProgress(0);
-        setUploadError(error?.data?.message || 'Upload failed');
+        const response = await axios.post(uploadUrl, formData, {
+          headers: {
+            Authorization: token ? `Token ${token}` : '',
+            'Accept-Language': currentLang,
+            Accept: 'application/json',
+            'Content-Type': 'multipart/form-data',
+          },
 
-        Toast.show({
-          type: 'error',
-          text1: 'Failed to upload file',
-          text2: error?.data?.message || 'Please try again',
+          timeout: 120000,
+
+          onUploadProgress: progressEvent => {
+            if (!progressEvent.total) return;
+
+            const progress = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total,
+            );
+
+            console.log('Progress:', progress + '%');
+
+            setMediaState(prev => ({
+              ...prev,
+              progress,
+            }));
+          },
         });
 
-        // Keep uploadedType and local preview for retry
-        // DO NOT clear: setUploadedType(null), setLocalPreviewUri(null)
+        console.log('UPLOAD SUCCESS');
+        console.log(response.data);
+
+        const data = response.data?.data ?? response.data;
+
+        setMediaState(prev => ({
+          ...prev,
+          isUploading: false,
+          progress: 100,
+          serverUrl: data?.url ?? null,
+          serverThumbnail: data?.thumbnail ?? null,
+          duration: data?.duration ?? prev.duration,
+          pendingRetry: null,
+          error: null,
+        }));
+
+        return data?.url ?? null;
+      } catch (err: any) {
+        console.log('========== UPLOAD FAILED ==========');
+
+        let errorMessage = 'Upload failed';
+
+        if (axios.isAxiosError(err)) {
+          console.log('Status:', err.response?.status);
+          console.log('Response:', err.response?.data);
+
+          const responseData = err.response?.data;
+
+          if (typeof responseData === 'string') {
+            errorMessage = responseData;
+          } else if (responseData) {
+            errorMessage =
+              responseData.error ||
+              responseData.message ||
+              responseData.detail ||
+              errorMessage;
+          } else if (err.message) {
+            errorMessage = err.message;
+          }
+        } else if (err instanceof Error) {
+          errorMessage = err.message;
+        }
+
+        console.log('Final Error:', errorMessage);
+
+        setMediaState(prev => ({
+          ...prev,
+          isUploading: false,
+          progress: 0,
+          error: errorMessage,
+        }));
+
+        Alert.alert('Upload Failed', errorMessage);
+
         return null;
       }
     },
-    [uploadFile],
+    [],
   );
+  // ==========================================
+  // AUTO-CLEAR ON ERROR
+  // ==========================================
+  useEffect(() => {
+    if (mediaState.error) {
+      const timer = setTimeout(() => {
+        setMediaState(initialMediaState);
+        isMediaProcessedRef.current = false;
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [mediaState.error]);
 
-  const handleRemoveMedia = useCallback(() => {
-    setLocalPreviewUri(null);
-    setUploadedUrl(null);
-    setUploadedType(null);
-    setUploadedDuration(null);
-    setUploadProgress(0);
-    setUploadError(null);
-    setPendingUpload(null);
-  }, []);
-
-  const handleRetryUpload = useCallback(() => {
-    if (!pendingUpload) return;
-    console.log('Retrying upload:', pendingUpload);
-    handleUploadFile(pendingUpload.uri, pendingUpload.type, pendingUpload.name);
-  }, [pendingUpload, handleUploadFile]);
-
+  // ==========================================
+  // ROBUST GALLERY PICKER EFFECT - 0MS PREVIEW
+  // ==========================================
   useEffect(() => {
     if (!selectedMedia) return;
 
-    const media = Array.isArray(selectedMedia)
+    const media: any = Array.isArray(selectedMedia)
       ? selectedMedia[0]
       : selectedMedia;
 
-    if (!media?.uri) {
-      console.log('No media URI found');
+    if (!media?.uri) return;
+
+    // ==========================================
+    // CRITICAL FIX: BLOCK RE-EMISSIONS
+    // ==========================================
+    if (isMediaProcessedRef.current) {
+      resetGallery();
       return;
     }
 
-    console.log('Processing selected media:', media);
+    // LOCK IMMEDIATELY
+    isMediaProcessedRef.current = true;
 
-    const mimeType = media.type ?? 'image/jpeg';
-    const fileName =
-      media.fileName ?? `media.${mimeType.split('/')[1] ?? 'jpg'}`;
+    setMediaState({
+      localUri: media.uri,
+      serverUrl: null,
+      serverThumbnail: null,
+      type: null,
+      duration: null,
+      isUploading: true,
+      progress: 0,
+      error: null,
+      pendingRetry: null,
+    });
 
-    // Determine if it's video, image, or audio
-    let mediaType: 'video' | 'image' | 'audio' = 'image';
-    if (mimeType.startsWith('video/')) {
-      mediaType = 'video';
-    } else if (mimeType.startsWith('audio/')) {
-      mediaType = 'audio';
+    resetGallery();
+
+    let mimeType = media.type || 'image/jpeg';
+    if (!media.type) {
+      const lowerUri = media.uri.toLowerCase();
+      if (
+        lowerUri.includes('.mp4') ||
+        lowerUri.includes('.mov') ||
+        lowerUri.includes('.avi')
+      ) {
+        mimeType = 'video/mp4';
+      } else if (lowerUri.includes('.png')) {
+        mimeType = 'image/png';
+      } else if (lowerUri.includes('.webp')) {
+        mimeType = 'image/webp';
+      }
     }
 
-    // ✅ SET LOCAL PREVIEW IMMEDIATELY - Shows in ChatInput instantly
-    setLocalPreviewUri(media.uri);
-    setUploadedType(mediaType);
+    let mediaType: 'video' | 'image' | 'audio' = 'image';
+    if (mimeType.startsWith('video/')) mediaType = 'video';
+    else if (mimeType.startsWith('audio/')) mediaType = 'audio';
 
-    // Handle duration - iOS returns duration in seconds, sometimes as decimal
+    const ext = mimeType.split('/')[1] || 'jpg';
+    const fileName = media.fileName || `media.${ext}`;
+
     const duration = media.duration
       ? media.duration > 1000
         ? Math.round(media.duration / 1000)
         : Math.round(media.duration)
       : null;
 
-    setUploadedDuration(duration);
+    setMediaState(prev => ({
+      ...prev,
+      type: mediaType,
+      duration: duration,
+      pendingRetry: {uri: media.uri, type: mimeType, name: fileName},
+    }));
 
-    console.log('Uploading:', {
-      uri: media.uri,
-      type: mimeType,
-      fileName,
-      mediaType,
-      duration,
-      fileSize: media.fileSize,
-    });
+    const isInvalidUploadUri =
+      Platform.OS === 'ios' &&
+      (media.uri.startsWith('ph://') ||
+        media.uri.startsWith('assets-library://'));
 
-    // Start upload in background - preview already visible above
-    handleUploadFile(media.uri, mimeType, fileName);
-    resetGallery();
-  }, [selectedMedia, handleUploadFile, resetGallery]);
+    if (isInvalidUploadUri) {
+      setMediaState(prev => ({
+        ...prev,
+        isUploading: false,
+        error: 'File read error. Check picker settings.',
+      }));
+      Toast.show({
+        type: 'error',
+        text1: 'Upload Error',
+        text2: 'Cannot read file directly from gallery.',
+      });
+    } else {
+      // INSTANT UPLOAD (0ms delay)
+      handleUploadFile(media.uri, mimeType, fileName);
+    }
+  }, [selectedMedia]);
 
+  // ==========================================
+  // AUDIO RECORDING EFFECT
+  // ==========================================
   useEffect(() => {
     if (!audioPath) return;
-    setUploadedType('audio');
-    setUploadedDuration(recordingDuration);
     const formattedUri = audioPath.startsWith('file://')
       ? audioPath
       : `file://${audioPath}`;
+
+    setMediaState({
+      localUri: formattedUri,
+      serverUrl: null,
+      serverThumbnail: null,
+      type: 'audio',
+      duration: recordingDuration,
+      isUploading: true,
+      progress: 0,
+      error: null,
+      pendingRetry: {
+        uri: formattedUri,
+        type: 'audio/wav',
+        name: 'recording.wav',
+      },
+    });
+
     handleUploadFile(formattedUri, 'audio/wav', 'recording.wav');
     resetAudio();
   }, [audioPath, handleUploadFile, resetAudio, recordingDuration]);
@@ -601,14 +717,37 @@ const SupportChat = () => {
     }
   }, [socketMessages, senderType, conversationId, handleMarkAsRead]);
 
+  // ==========================================
+  // IMPROVED SEND HANDLER (INSTANT CLEAR + SAFE ROLLBACK)
+  // ==========================================
   const handleSend = async (text: string) => {
     const trimmedText = text.trim();
-    if (!trimmedText && !uploadedUrl) return;
+    const hasMedia = !!mediaState.localUri;
+
+    if (!trimmedText && !hasMedia) return;
     if (!conversationId) return;
 
+    if (hasMedia && mediaState.isUploading) {
+      Toast.show({
+        type: 'info',
+        text1: 'Please wait',
+        text2: 'Upload is still in progress',
+      });
+      return;
+    }
+
+    if (hasMedia && !mediaState.serverUrl) {
+      Toast.show({
+        type: 'error',
+        text1: 'Media upload failed',
+        text2: 'Please remove the media and try again',
+      });
+      return;
+    }
+
     const tempId = Date.now();
-    const isMedia = !!uploadedUrl && !!uploadedType;
-    const messageType = isMedia ? uploadedType : 'text';
+    const isMedia = !!mediaState.serverUrl && !!mediaState.type;
+    const messageType = isMedia ? mediaState.type : 'text';
 
     const tempMessage: Message = {
       id: tempId,
@@ -618,37 +757,79 @@ const SupportChat = () => {
       sender_type: senderType,
       message_type: messageType as Message['message_type'],
       message: trimmedText,
-      media_url: isMedia ? uploadedUrl : null,
-      thumbnail: null,
-      duration: uploadedDuration,
+      media_url: isMedia ? mediaState.serverUrl : null,
+      thumbnail: mediaState.serverThumbnail,
+      duration: mediaState.duration,
       status: 'sent',
       created_at: new Date().toISOString(),
     };
 
     setMessages(prev => [tempMessage, ...prev]);
 
+    // 1. Cache media state for payload and potential rollback
+    const cachedMediaState = isMedia ? {...mediaState} : null;
+
+    // 2. INSTANTLY CLEAR INPUT
+    if (isMedia) {
+      isMediaProcessedRef.current = false;
+      setMediaState(initialMediaState);
+    }
+
     const payload: any = {
       conversation_id: conversationId,
       message_type: messageType,
     };
 
-    if (isMedia) {
-      payload.media_url = uploadedUrl;
-      payload.duration = uploadedDuration;
-    } else {
+    // 3. Use cached values for the API payload
+    if (isMedia && cachedMediaState) {
+      payload.media_url = cachedMediaState.serverUrl;
+      payload.duration = cachedMediaState.duration;
+      payload.thumbnail = cachedMediaState.serverThumbnail;
+    }
+
+    if (trimmedText) {
       payload.message = trimmedText;
     }
 
     try {
       const result: any = await sendMessage(payload).unwrap();
       if (result?.data) {
-        setMessages(prev => prev.map(m => (m.id === tempId ? result.data : m)));
+        // PRESERVE THUMBNAIL: Fallback to tempMessage thumbnail if backend drops it
+        setMessages(prev =>
+          prev.map(m => {
+            if (m.id === tempId) {
+              return {
+                ...m,
+                ...result.data,
+                thumbnail: result.data?.thumbnail || m.thumbnail,
+              };
+            }
+            return m;
+          }),
+        );
       }
-      if (isMedia) handleRemoveMedia();
     } catch (error) {
       console.log(error);
       setMessages(prev => prev.filter(m => m.id !== tempId));
+
+      // 4. SAFE ROLLBACK: If send fails, put media back in input so user doesn't lose it
+      if (isMedia && cachedMediaState) {
+        setMediaState(cachedMediaState);
+        isMediaProcessedRef.current = true;
+      }
     }
+  };
+
+  // ==========================================
+  // SAFE REMOVE MEDIA HANDLER
+  // ==========================================
+  const handleRemoveMedia = () => {
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+    isMediaProcessedRef.current = false; // Unlock so they can pick a new file
+    setMediaState(initialMediaState);
   };
 
   const formatDuration = (seconds: number | null | undefined): string => {
@@ -668,9 +849,7 @@ const SupportChat = () => {
     }
   };
 
-  // Open both images and videos in browser for smooth playback
   const openMediaModal = (url: string, type: 'image' | 'video') => {
-    // Open in browser - videos play smooth, images show full screen
     Linking.openURL(url).catch(err => {
       console.error(`Failed to open ${type}:`, err);
       Toast.show({
@@ -680,17 +859,15 @@ const SupportChat = () => {
       });
     });
   };
+
   useEffect(() => {
-    if (Platform.OS !== 'ios') {
-      return;
-    }
+    if (Platform.OS !== 'ios') return;
 
     const showListener = Keyboard.addListener(
       'keyboardWillChangeFrame',
       event => {
         const height =
           Dimensions.get('screen').height - event.endCoordinates.screenY;
-
         setKeyboardHeight(Math.max(height, 0));
       },
     );
@@ -704,6 +881,7 @@ const SupportChat = () => {
       hideListener.remove();
     };
   }, []);
+
   const renderMessage = ({item}: {item: Message}) => {
     const isMe = item.sender_type === senderType;
     const isDeleted = deletedIds.has(item.id);
@@ -713,9 +891,12 @@ const SupportChat = () => {
       ? profile?.image
       : participants.find(p => p.id === item.sender_id)?.profile_image;
 
+    // Check if the message has an image or video to apply width constraint to the text
+    const hasImageOrVideo =
+      item.message_type === 'image' || item.message_type === 'video';
+
     const renderMedia = () => {
       if (isDeleted) return null;
-
       if (item.message_type === 'image' && item.media_url) {
         return (
           <TouchableOpacity
@@ -732,19 +913,19 @@ const SupportChat = () => {
       }
 
       if (item.message_type === 'video' && item?.media_url) {
+        const videoThumbnail = item?.thumbnail
+          ? item?.thumbnail
+          : item.media_url;
         return (
           <TouchableOpacity
             activeOpacity={0.9}
-            onPress={() => openMediaModal(item.media_url!, 'video')}
+            onPress={() => openMediaModal(item?.media_url!, 'video')}
             style={styles.mediaContainer}>
             <View style={styles.videoContainer}>
-              <Video
-                source={{uri: item.media_url}}
+              <Image
+                source={{uri: videoThumbnail}}
                 style={styles.mediaImage}
                 resizeMode="cover"
-                paused={true}
-                repeat={false}
-                muted={true}
               />
               <View style={styles.playIconWrapper}>
                 <View style={styles.playIcon} />
@@ -789,7 +970,7 @@ const SupportChat = () => {
             </View>
             <View style={styles.audioWaveContainer}>
               <View style={styles.waveform}>
-                {WAVEFORM_HEIGHTS.map((h, i) => (
+                {WAVEFORM_HEIGHTS?.map((h, i) => (
                   <View
                     key={i}
                     style={[
@@ -812,9 +993,7 @@ const SupportChat = () => {
             {isPlaying && (
               <Video
                 ref={audioPlayerRef}
-                source={{
-                  uri: item?.media_url,
-                }}
+                source={{uri: item?.media_url}}
                 paused={false}
                 muted={false}
                 volume={1}
@@ -872,15 +1051,18 @@ const SupportChat = () => {
               styles.bubble,
               isMe ? styles.myBubble : styles.otherBubble,
             ]}>
-            {renderMedia()}
+            <View
+              style={hasImageOrVideo ? styles.mediaWithTextWrapper : undefined}>
+              {renderMedia()}
 
-            {isDeleted ? (
-              <Text style={[styles.text, styles.deletedTextStyle]}>
-                {isMe ? 'Your message is deleted' : 'This message is deleted'}
-              </Text>
-            ) : item.message ? (
-              <Text style={styles.text}>{item.message}</Text>
-            ) : null}
+              {isDeleted ? (
+                <Text style={[styles.text, styles.deletedTextStyle]}>
+                  {isMe ? 'Your message is deleted' : 'This message is deleted'}
+                </Text>
+              ) : item.message ? (
+                <Text style={styles.text}>{item.message}</Text>
+              ) : null}
+            </View>
 
             <View style={styles.bottomRow}>
               <Text style={styles.time}>
@@ -934,9 +1116,7 @@ const SupportChat = () => {
 
   const handlePickMedia = () =>
     pickMedia({mediaType: 'mixed', selectionLimit: 1});
-
   const handleCapturePhoto = () => capturePhoto();
-
   const handleCaptureVideo = () => captureVideo();
 
   const onRefresh = useCallback(() => {
@@ -954,9 +1134,6 @@ const SupportChat = () => {
     }
   }, [conversationId]);
 
-  // ==========================================
-  // KEYBOARD HANDLING (Exact same logic from Chat.tsx)
-  // ==========================================
   const {height} = useKeyboardAnimation();
   const isTabScreen = useIsTabScreen();
   const tabBarHeight = isTabScreen ? scaleSize(70) : 0;
@@ -980,8 +1157,6 @@ const SupportChat = () => {
         status={isOtherUserOnline ? 'online' : undefined}
         onlayout={() => {}}
       />
-
-      {/* REMOVED KeyboardAvoidingView, using FlatList directly like Chat.tsx */}
       <FlatList
         ref={flatListRef}
         key={conversationId}
@@ -1025,24 +1200,43 @@ const SupportChat = () => {
         }}>
         <ChatInput
           showInputIcon
+          isPickerLoading={isPickerLoading}
           onPress={handleSend}
           showImage
           openGallery={handlePickMedia}
           capturePhoto={handleCapturePhoto}
           captureVideo={handleCaptureVideo}
           handleAudio={handleToggleRecording}
-          uploadedUrl={uploadedUrl || localPreviewUri}
-          uploadedType={uploadedType}
-          isUploading={isUploading}
+          uploadedUrl={
+            mediaState.localUri ||
+            mediaState.serverThumbnail ||
+            mediaState.serverUrl ||
+            null
+          }
+          uploadedThumbnail={mediaState.serverThumbnail || null}
+          uploadedType={mediaState.type}
+          isUploading={mediaState.isUploading}
           isRecording={isRecording}
           onRemoveMedia={handleRemoveMedia}
-          uploadProgress={uploadProgress}
-          uploadError={uploadError}
-          onRetryUpload={handleRetryUpload}
+          uploadProgress={mediaState.progress}
+          uploadError={mediaState.error}
+          onRetryUpload={() => {
+            if (mediaState.pendingRetry) {
+              setMediaState(prev => ({
+                ...prev,
+                isUploading: true,
+                error: null,
+                progress: 0,
+              }));
+              handleUploadFile(
+                mediaState.pendingRetry.uri,
+                mediaState.pendingRetry.type,
+                mediaState.pendingRetry.name,
+              );
+            }
+          }}
         />
       </View>
-
-      {/* ADDED: fakeView to handle keyboard push smoothly */}
       {Platform.OS === 'android' && <Animated.View style={fakeView} />}
     </AppView>
   );
@@ -1092,6 +1286,10 @@ const styles = StyleSheet.create({
   loader: {paddingVertical: SPACING.m},
   noMoreContainer: {paddingVertical: SPACING.s, alignItems: 'center'},
   noMoreText: {color: COLORS.GRAY_TEXT_COLOR, fontSize: scaleSize(12)},
+  // NEW STYLE: Restricts text width to match the width of the image/video container when present
+  mediaWithTextWrapper: {
+    width: SCREEN_WIDTH * 0.42,
+  },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1132,9 +1330,8 @@ const styles = StyleSheet.create({
   },
   playIconWrapper: {
     position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: [{translateX: -scaleSize(16)}, {translateY: -scaleSize(16)}],
+    top: '35%',
+    left: '40%',
     width: scaleSize(32),
     height: scaleSize(32),
     borderRadius: scaleSize(16),
@@ -1223,7 +1420,6 @@ const styles = StyleSheet.create({
     fontFamily: FONT_FAMILY.Medium,
     marginRight: 24,
   },
-
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.95)',
@@ -1269,7 +1465,6 @@ const styles = StyleSheet.create({
     fontSize: scaleSize(16),
     fontWeight: 'bold',
   },
-
   dotBtn: {
     position: 'absolute',
     top: 5,

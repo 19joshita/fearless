@@ -974,6 +974,7 @@ const Chat = () => {
       />
       {(!isAgent || chatMessages?.length > 0) && (
         <ChatInput
+          showImage
           onPress={handleChatInput}
           isDisabled={isLoading || isTyping}
         />

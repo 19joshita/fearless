@@ -63,7 +63,6 @@ const baseQuery = fetchBaseQuery({
 
 const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {
   const result = await baseQuery(args, api, extraOptions);
-
   if (
     result?.error?.status &&
     api?.endpoint !== 'getSupportChatMessages' &&
@@ -135,7 +134,7 @@ export const supportChatSlice = createApi({
         const newItems = newCache.data.filter(
           c => !existingIds.has(c.conversation_id),
         );
-        currentCache.data = [...(currentCache.data || []), ...newItems]; // <-- ONLY ADDS NEW ITEMS!
+        currentCache.data = [...(currentCache.data || []), ...newItems];
       },
     }),
 
@@ -189,12 +188,19 @@ export const supportChatSlice = createApi({
     }),
 
     // ==================== Upload File ====================
-    uploadSupportChatFile: builder.mutation<UploadFileResponse, FormData>({
+    uploadSupportChatFile: builder.mutation<any, FormData>({
       query: formData => ({
         url: ENDPOINTS.SUPPORT_CHAT_UPLOAD,
         method: METHOD.POST,
         body: formData,
       }),
+      transformResponse: (response: any) => {
+        return response;
+      },
+      transformErrorResponse: (error: any) => {
+        console.log('Upload Error:', JSON.stringify(error, null, 2));
+        return error;
+      },
     }),
 
     // ==================== Mark Conversation As Read (Existing) ====================
@@ -237,7 +243,7 @@ export const supportChatSlice = createApi({
                   c => c.conversation_id === Number(conversation_id),
                 );
                 if (convo) {
-                  convo.unread_count = 0; // ✅ Force to 0
+                  convo.unread_count = 0;
                 }
               }
             },
