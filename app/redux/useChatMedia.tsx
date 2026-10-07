@@ -1,5 +1,5 @@
 // @redux/useChatMedia.ts
-import { useState, useCallback, useRef, useEffect } from 'react';
+import {useState, useCallback, useRef, useEffect} from 'react';
 import {
   launchImageLibrary,
   launchCamera,
@@ -8,7 +8,10 @@ import {
   Asset,
 } from 'react-native-image-picker';
 import AudioRecord from 'react-native-audio-record';
-import { Platform, PermissionsAndroid, Alert } from 'react-native';
+import {Platform, PermissionsAndroid, Alert} from 'react-native';
+
+// ==================== CONSTANTS ====================
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 500MB
 
 // ==================== GALLERY PICKER TYPES ====================
 interface SelectedMedia {
@@ -99,6 +102,13 @@ export const useGalleryPicker = (): UseGalleryPickerReturn => {
             return;
           }
 
+          // Client-side file size check (instant, zero network wait)
+          if (asset.fileSize && asset.fileSize > MAX_FILE_SIZE) {
+            Alert.alert('File Too Large', 'Maximum file size is 100MB.');
+            setError('File too large');
+            return;
+          }
+
           // Immediate state update
           setSelectedMedia({
             uri: asset.uri,
@@ -182,6 +192,15 @@ export const useGalleryPicker = (): UseGalleryPickerReturn => {
 
       if (response.assets && response.assets.length > 0) {
         const asset = response.assets[0];
+
+        // Client-side file size check (instant, zero network wait)
+        if (asset.fileSize && asset.fileSize > MAX_FILE_SIZE) {
+          Alert.alert('File Too Large', 'Maximum file size is 100MB.');
+          setError('File too large');
+          setLoading(false);
+          return;
+        }
+
         const mediaData: SelectedMedia = {
           uri: asset.uri,
           type: asset.type,
@@ -213,9 +232,9 @@ export const useGalleryPicker = (): UseGalleryPickerReturn => {
 
         if (
           permissions['android.permission.CAMERA'] !==
-          PermissionsAndroid.RESULTS.GRANTED ||
+            PermissionsAndroid.RESULTS.GRANTED ||
           permissions['android.permission.RECORD_AUDIO'] !==
-          PermissionsAndroid.RESULTS.GRANTED
+            PermissionsAndroid.RESULTS.GRANTED
         ) {
           console.log('Camera or microphone permission denied');
           Alert.alert(
@@ -267,6 +286,15 @@ export const useGalleryPicker = (): UseGalleryPickerReturn => {
 
       if (response.assets && response.assets.length > 0) {
         const asset = response.assets[0];
+
+        // Client-side file size check (instant, zero network wait)
+        if (asset.fileSize && asset.fileSize > MAX_FILE_SIZE) {
+          Alert.alert('File Too Large', 'Maximum file size is 500MB.');
+          setError('File too large');
+          setLoading(false);
+          return;
+        }
+
         const mediaData: SelectedMedia = {
           uri: asset.uri,
           type: asset.type,
@@ -427,6 +455,16 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
         timerRef.current = null;
       }
 
+      // Client-side audio size check (instant, zero network wait)
+      // WAV formula: 44-byte header + (sampleRate × bytesPerSample × channels × duration)
+      const estimatedAudioSize = 44 + 44100 * 2 * 1 * recordingDuration;
+      if (estimatedAudioSize > MAX_FILE_SIZE) {
+        Alert.alert('Audio Too Large', 'Maximum audio file size is 500MB.');
+        setError('Audio file too large');
+        setRecordingDuration(0);
+        return null;
+      }
+
       setAudioPath(path);
       return path;
     } catch (err) {
@@ -443,7 +481,7 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
 
       return null;
     }
-  }, []);
+  }, [recordingDuration]);
 
   const formatDuration = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);

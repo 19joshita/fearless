@@ -1,9 +1,10 @@
 import {
-  SupportChatCollection,
+  // SupportChatCollection,
   SupportChatRootStackParamList,
 } from '@navigation-utils';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import { RouteNames } from '@utils';
+import { View } from 'react-native';
 
 const ResourcesStack = () => {
   const Support = createNativeStackNavigator<SupportChatRootStackParamList>();
@@ -12,7 +13,8 @@ const ResourcesStack = () => {
       screenOptions={{
         headerShown: false,
       }}>
-      {SupportChatCollection?.map((stack, index) => (
+        <View></View>
+      {/* {SupportChatCollection?.map((stack:any, index:any) => (
         <Support.Screen
           initialParams={
             stack?.name === RouteNames.SUPPORT_CHAT
@@ -23,7 +25,7 @@ const ResourcesStack = () => {
           component={stack.component}
           key={index.toString()}
         />
-      ))}
+      ))} */}
     </Support.Navigator>
   );
 };

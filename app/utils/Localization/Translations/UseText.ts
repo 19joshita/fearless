@@ -6,7 +6,7 @@ export const useText = () => {
   const selectedLanguage = useSelector(
     (state: RootState) => state.app.currentLanguage,
   );
-  const translationSet = translations[selectedLanguage] ?? translations.en;
+  const translationSet:any = translations[selectedLanguage] ?? translations.en;
 
   const TEXT = new Proxy({} as Record<TranslationKeys, string>, {
     get(_, key: string) {

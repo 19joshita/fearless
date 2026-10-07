@@ -16,7 +16,6 @@ import {
   Linking,
   Alert,
 } from 'react-native';
-
 import Animated, {useAnimatedStyle} from 'react-native-reanimated';
 import Video, {VideoRef} from 'react-native-video';
 import {AppView, ChatHeader, ChatInput} from '@components';
@@ -24,7 +23,7 @@ import {COLORS, FONT_FAMILY, FONT_VARIENTS, scaleSize, SPACING} from '@theme';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {RouteProp, useRoute, useFocusEffect} from '@react-navigation/native';
 import {useText} from '@localization';
-import {useAppSelector} from '@redux/reduxHook';
+import {useAppDispatch, useAppSelector} from '@redux/reduxHook';
 import Toast from 'react-native-toast-message';
 import axios from 'axios';
 import {
@@ -42,7 +41,6 @@ import {
   ICON_RECIEVER_RADIUS,
   ICON_DELETE,
 } from '@assets/icons';
-
 import type {Message} from 'types/support-chat';
 import {AppImage} from '@global-components';
 import useKeyboardAnimation from './../../Home/Chat/UseKeyboardAnimation';
@@ -50,9 +48,12 @@ import useIsTabScreen from './../../Home/Chat/useIsTabScreen';
 import {useAudioRecorder, useGalleryPicker} from '@redux/useChatMedia';
 import {useSupportChatSocket} from './../../../hooks/useSupportChatSocket';
 import {store} from '@redux/store';
-import {ENDPOINTS, getPrefsValue} from '@utils';
+import {ENDPOINTS, getPrefsValue, setPrefsValue} from '@utils';
 import {STORAGE} from '@constants';
-
+import ChatRulesModal from './ChatRulesModal';
+import {useNavigation} from '@react-navigation/native';
+import {useUpdateProfileMutation} from '@redux/auth-api-slice';
+import {setUserInfo} from '@redux/app-slice';
 // --- Types ---
 type SupportChatRouteParams = {
   mode: 'user' | 'admin';
@@ -91,7 +92,6 @@ const initialMediaState: MediaState = {
 };
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-
 const WAVEFORM_HEIGHTS = Array.from(
   {length: 20},
   () => Math.floor(Math.random() * 16) + 6,
@@ -138,6 +138,9 @@ const MessageStatusTick = ({status}: {status?: string | null}) => {
 // --- Component ---
 const SupportChat = () => {
   const route = useRoute<RouteProps>();
+  const navigation = useNavigation();
+  const dispatch = useAppDispatch();
+  const [updateProfile] = useUpdateProfileMutation();
   const {
     selectedMedia,
     pickMedia,
@@ -150,6 +153,8 @@ const SupportChat = () => {
   const [markMessagesAsRead] = useMarkMessagesAsReadMutation();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [showChatRules, setShowChatRules] = useState(false);
+  const [showRulesReadOnly, setShowRulesReadOnly] = useState(false);
   const {
     audioPath,
     isRecording,
@@ -299,6 +304,12 @@ const SupportChat = () => {
     }
   }, [conversationId]);
 
+  // Chat Rules check - first time?
+  useEffect(() => {
+    if (!profile?.chat_rules_accepted) {
+      setShowChatRules(true);
+    }
+  }, [profile]);
   const handleDeleteMessage = async (messageId: number) => {
     setMenuVisibleId(null);
     try {
@@ -469,18 +480,14 @@ const SupportChat = () => {
     }
   }, [mediaState.error]);
 
-  // ==========================================
   // ROBUST GALLERY PICKER EFFECT - 0MS PREVIEW
   // ==========================================
   useEffect(() => {
     if (!selectedMedia) return;
-
     const media: any = Array.isArray(selectedMedia)
       ? selectedMedia[0]
       : selectedMedia;
-
     if (!media?.uri) return;
-
     // ==========================================
     // CRITICAL FIX: BLOCK RE-EMISSIONS
     // ==========================================
@@ -491,7 +498,6 @@ const SupportChat = () => {
 
     // LOCK IMMEDIATELY
     isMediaProcessedRef.current = true;
-
     setMediaState({
       localUri: media.uri,
       serverUrl: null,
@@ -564,9 +570,7 @@ const SupportChat = () => {
     }
   }, [selectedMedia]);
 
-  // ==========================================
-  // AUDIO RECORDING EFFECT
-  // ==========================================
+  // AUDIO RECORDING EFFECT ==========================================
   useEffect(() => {
     if (!audioPath) return;
     const formattedUri = audioPath.startsWith('file://')
@@ -717,9 +721,8 @@ const SupportChat = () => {
     }
   }, [socketMessages, senderType, conversationId, handleMarkAsRead]);
 
-  // ==========================================
-  // IMPROVED SEND HANDLER (INSTANT CLEAR + SAFE ROLLBACK)
-  // ==========================================
+  // IMPROVED SEND HANDLER (INSTANT CLEAR + SAFE ROLLBACK)  ==========================================
+
   const handleSend = async (text: string) => {
     const trimmedText = text.trim();
     const hasMedia = !!mediaState.localUri;
@@ -794,7 +797,7 @@ const SupportChat = () => {
     try {
       const result: any = await sendMessage(payload).unwrap();
       if (result?.data) {
-        // PRESERVE THUMBNAIL: Fallback to tempMessage thumbnail if backend drops it
+        //  PRESERVE THUMBNAIL: Fallback to tempMessage thumbnail if backend drops it  ==========================================
         setMessages(prev =>
           prev.map(m => {
             if (m.id === tempId) {
@@ -820,9 +823,7 @@ const SupportChat = () => {
     }
   };
 
-  // ==========================================
-  // SAFE REMOVE MEDIA HANDLER
-  // ==========================================
+  // SAFE REMOVE MEDIA HANDLER ==========================================
   const handleRemoveMedia = () => {
     if (progressIntervalRef.current) {
       clearInterval(progressIntervalRef.current);
@@ -862,7 +863,6 @@ const SupportChat = () => {
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
-
     const showListener = Keyboard.addListener(
       'keyboardWillChangeFrame',
       event => {
@@ -871,7 +871,6 @@ const SupportChat = () => {
         setKeyboardHeight(Math.max(height, 0));
       },
     );
-
     const hideListener = Keyboard.addListener('keyboardWillHide', () => {
       setKeyboardHeight(0);
     });
@@ -891,7 +890,7 @@ const SupportChat = () => {
       ? profile?.image
       : participants.find(p => p.id === item.sender_id)?.profile_image;
 
-    // Check if the message has an image or video to apply width constraint to the text
+    //  Check if the message has an image or video to apply width constraint to the text  ==========================================
     const hasImageOrVideo =
       item.message_type === 'image' || item.message_type === 'video';
 
@@ -1157,6 +1156,23 @@ const SupportChat = () => {
         status={isOtherUserOnline ? 'online' : undefined}
         onlayout={() => {}}
       />
+      {/* <TouchableOpacity
+        onPress={() => setShowRulesReadOnly(true)}
+        style={{
+          paddingHorizontal: 16,
+          paddingVertical: 8,
+          backgroundColor: '#F5F0F5',
+        }}
+        activeOpacity={0.7}>
+        <Text
+          style={{
+            fontSize: 13,
+            color: COLORS.SECONDARY_COLOR,
+            fontWeight: '500',
+          }}>
+          📜 {TEXT.CHAT_RULES}
+        </Text>
+      </TouchableOpacity> */}
       <FlatList
         ref={flatListRef}
         key={conversationId}
@@ -1237,6 +1253,32 @@ const SupportChat = () => {
           }}
         />
       </View>
+      <ChatRulesModal
+        visible={showChatRules}
+        onClose={() => {
+          setShowChatRules(false);
+          navigation.goBack();
+        }}
+        onStartChat={async () => {
+          try {
+            const formData = new FormData();
+            formData.append('chat_rules_accepted', 'true');
+            await updateProfile(formData).unwrap();
+            dispatch(
+              setUserInfo({...profile, chat_rules_accepted: true} as UserData),
+            );
+          } catch (e) {
+            console.log('Update error:', e);
+          }
+          setShowChatRules(false);
+        }}
+        readOnly={false}
+      />
+      <ChatRulesModal
+        visible={showRulesReadOnly}
+        onClose={() => setShowRulesReadOnly(false)}
+        readOnly={true}
+      />
       {Platform.OS === 'android' && <Animated.View style={fakeView} />}
     </AppView>
   );
@@ -1286,7 +1328,7 @@ const styles = StyleSheet.create({
   loader: {paddingVertical: SPACING.m},
   noMoreContainer: {paddingVertical: SPACING.s, alignItems: 'center'},
   noMoreText: {color: COLORS.GRAY_TEXT_COLOR, fontSize: scaleSize(12)},
-  // NEW STYLE: Restricts text width to match the width of the image/video container when present
+  //  NEW STYLE: Restricts text width to match the width of the image/video container when present
   mediaWithTextWrapper: {
     width: SCREEN_WIDTH * 0.42,
   },

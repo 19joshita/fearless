@@ -41,6 +41,7 @@ interface UserData {
   provider: string | null;
   language: string;
   date_joined: string;
+  chat_rules_accepted?: boolean;
 }
 
 interface OTPSuccessResponse {
