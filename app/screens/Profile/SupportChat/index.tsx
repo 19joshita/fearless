@@ -1156,7 +1156,7 @@ const SupportChat = () => {
         status={isOtherUserOnline ? 'online' : undefined}
         onlayout={() => {}}
       />
-      {/* <TouchableOpacity
+      <TouchableOpacity
         onPress={() => setShowRulesReadOnly(true)}
         style={{
           paddingHorizontal: 16,
@@ -1172,7 +1172,7 @@ const SupportChat = () => {
           }}>
           📜 {TEXT.CHAT_RULES}
         </Text>
-      </TouchableOpacity> */}
+      </TouchableOpacity>
       <FlatList
         ref={flatListRef}
         key={conversationId}
